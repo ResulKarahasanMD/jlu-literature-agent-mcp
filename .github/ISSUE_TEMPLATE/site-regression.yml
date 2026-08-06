@@ -1,0 +1,63 @@
+name: Publisher or database regression
+description: Report a changed publisher, CNKI, CARSI, or WebVPN flow without sharing secrets.
+title: "[site] "
+labels: ["site-regression"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste credentials, cookies, signed URLs, WebVPN tokens, HAR files, or copyrighted full text.
+  - type: input
+    id: host
+    attributes:
+      label: Landing host
+      placeholder: onlinelibrary.wiley.com
+    validations:
+      required: true
+  - type: input
+    id: doi_prefix
+    attributes:
+      label: DOI prefix or database
+      placeholder: 10.1002 or CNKI
+    validations:
+      required: true
+  - type: dropdown
+    id: access_mode
+    attributes:
+      label: Access mode
+      options:
+        - OA/public
+        - JLU campus network
+        - JLU institution login/CARSI
+        - JLU WebVPN
+        - Unknown
+    validations:
+      required: true
+  - type: textarea
+    id: observation
+    attributes:
+      label: Redacted observation
+      description: Include HTTP status, content type, visible error text, and whether a human challenge appeared.
+    validations:
+      required: true
+  - type: textarea
+    id: attempts
+    attributes:
+      label: Routes attempted
+      description: Summarize redacted `litlib status --attempts <task-id>` output and stop conditions.
+    validations:
+      required: true
+  - type: input
+    id: tested_at
+    attributes:
+      label: Date tested
+      placeholder: YYYY-MM-DD
+    validations:
+      required: true
+  - type: checkboxes
+    id: compliance
+    attributes:
+      label: Compliance confirmation
+      options:
+        - label: I used my own authorized access and did not bypass CAPTCHA, paywalls, or rate limits.
+          required: true

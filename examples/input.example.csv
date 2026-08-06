@@ -1,0 +1,6 @@
+doi,pmid,pmcid,arxiv,title
+10.1000/example,,,,
+,12345678,,,
+,,PMC1234567,,
+,,,2101.00001,
+,,,,A paper title for metadata resolution

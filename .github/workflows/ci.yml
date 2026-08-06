@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+      - run: uv sync --locked --extra dev
+      - run: uv run ruff check .
+      - run: uv run pytest
+      - run: uv build
+      - name: Wheel smoke test
+        if: matrix.python-version == '3.13'
+        shell: pwsh
+        run: |
+          $wheel = (Get-ChildItem -LiteralPath dist -Filter *.whl).FullName
+          uv run --no-project --isolated --with $wheel litlib --version
+          uv run --no-project --isolated --with $wheel python -c "from litlib.config import paths; assert 'site-packages' not in str(paths.project_root).lower(); print(paths.project_root)"

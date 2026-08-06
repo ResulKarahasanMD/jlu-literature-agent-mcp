@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# 项目数据（不进 git）
+data/
+staging/
+state/
+logs/
+output/
+.litlib-runtime/
+*.pdf
+*.caj
+*.xpi
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
+
+# 环境与密钥
+.env
+.env.*
+!.env.example
+*.key
+*_key.json
+*api_key*
+*.bin
+!docs/SECURITY.md
+
+# 本机 WebVPN 探索脚本（包含门户资源标识，不发布）
+scripts/tok_test.py
+scripts/token_register.py
+
+# 本机早期实施记录，包含过时路径与环境快照；公开文档已迁移到 docs/
+IMPLEMENTATION_PLAN.md
+
+# 临时
+*.part
+*.tmp
+Thumbs.db
+
+# 编辑器
+.idea/
+.vscode/
