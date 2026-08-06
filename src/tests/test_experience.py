@@ -9,7 +9,14 @@ from litlib import experience
 
 @pytest.fixture(autouse=True)
 def isolated_experience(tmp_path, monkeypatch):
-    """把经验文件隔离到临时目录，避免污染真实运行数据。"""
+    """把经验文件隔离到临时目录，避免污染真实运行数据。
+
+    CI runner 项目位于 D 盘但 pytest tmp 位于 C 盘时，D 盘守卫会误伤测试；
+    这里显式关闭守卫，让测试与机器磁盘策略解耦。
+    """
+    from litlib import config
+
+    monkeypatch.setattr(config, "require_d_drive", lambda: False)
     target = tmp_path / "experience" / "experiences.json"
     monkeypatch.setattr(experience, "EXPERIENCE_FILE", target)
     return target
