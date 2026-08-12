@@ -4,7 +4,7 @@
 来源获取论文；非开放文献仅在用户具有权限时，通过校园网、CARSI/机构登录或吉大
 WebVPN 小批量访问。Zotero 是唯一文献主库。
 
-> 当前状态：`0.2.0 alpha`。元数据、OA、PDF 校验、任务状态、RIS 导入、LitLib MCP
+> 当前状态：`0.3.0 alpha`。元数据、OA、PDF 校验、任务状态、RIS 导入、LitLib MCP
 > 已有自动化测试；出版社与 CNKI 路线依赖实时页面，只做有监督 smoke test。
 
 ## 最终框架
@@ -158,6 +158,24 @@ OUP、Springer protocol、CNKI slider、ACS unsupported SP 和 RSC 429。
 - 付费墙/验证码/限流场景永远不会被当作成功经验学习；所有记录自动脱敏。
 
 这样每个人"用一次、记一次"，越用越顺，而项目本身不需要持续维护。
+
+## 纤维素酶数据扩展
+
+LitLib 还提供面向 UniProt accession 的数据准备基础能力：
+
+```powershell
+uv run litlib uniprot P12345 --output output\uniprot_P12345.json
+uv run litlib evidence scan staging\downloads\paper.pdf
+uv run litlib supplement discover "https://publisher.example/article"
+uv run litlib supplement download "https://publisher.example/supp.xlsx" --doi 10.xxxx/example
+uv run litlib cellulase validate data\measurements.jsonl
+uv run litlib cellulase maxima data\measurements.jsonl --output output\maxima.jsonl
+```
+
+该扩展允许缺失字段，保留原始单位、底物、实验条件和 DOI/页码/表图证据位置。最大值只在
+同一构建体、底物、指标族、单位和 assay method 内比较；相对活性、图表估读和待补充材料
+不会被静默当作精确绝对活性。图片处理队列和外部多模态模型属于后续可选层，不影响基础
+文献获取工作流。
 
 ## 开发与发布
 

@@ -9,6 +9,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 from litlib import __version__
 from litlib.config import (
@@ -47,6 +48,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         ("venv", paths.venv),
         ("sqlite state", paths.sqlite_dir),
         ("staging downloads", paths.staging_downloads),
+        ("staging supplements", paths.staging_supplements),
         ("output", paths.output),
         ("logs", paths.logs),
         ("runtime tmp", paths.tmp),
@@ -624,6 +626,141 @@ def _domain_filter(domain: str):
     return _matches
 
 
+def _write_json_output(payload: dict | list, output: str) -> None:
+    if not output:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+    target = Path(output)
+    ensure_storage_path(target)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"JSON: {target}")
+
+
+def cmd_uniprot(args: argparse.Namespace) -> int:
+    import asyncio
+
+    import httpx
+
+    from litlib.uniprot import fetch_entry
+
+    async def fetch_all() -> list[dict]:
+        async with httpx.AsyncClient(timeout=60) as client:
+            return [await fetch_entry(client, accession) for accession in args.accessions]
+
+    try:
+        entries = asyncio.run(fetch_all())
+    except (httpx.HTTPError, ValueError) as exc:
+        print(f"UniProt 获取失败: {exc}")
+        return 1
+    payload = entries[0] if len(entries) == 1 else entries
+    _write_json_output(payload, args.output)
+    if args.queue:
+        st = State()
+        try:
+            identifiers = []
+            for entry in entries:
+                identifiers.extend(
+                    reference[key]
+                    for reference in entry["references"]
+                    for key in ("doi", "pmid", "pmcid")
+                    if reference.get(key)
+                )
+            added, skipped = st.queue_add(identifiers, source="uniprot")
+            print(f"关联文献入队: {added}，重复跳过: {skipped}")
+        finally:
+            st.close()
+    return 0
+
+
+def cmd_evidence(args: argparse.Namespace) -> int:
+    from litlib.evidence import scan_pdf_evidence
+
+    try:
+        result = scan_pdf_evidence(args.pdf)
+    except Exception as exc:
+        print(f"证据扫描失败: {exc}")
+        return 1
+    _write_json_output(result, args.output)
+    return 0
+
+
+def cmd_supplement(args: argparse.Namespace) -> int:
+    import asyncio
+
+    import httpx
+
+    from litlib.supplements import (
+        SupplementCandidate,
+        discover_supplements_from_page,
+        download_supplement,
+    )
+
+    if args.supplement_cmd == "discover":
+        async def discover() -> list[dict]:
+            async with httpx.AsyncClient(timeout=60) as client:
+                candidates = await discover_supplements_from_page(client, args.article_url)
+            return [candidate.safe_dict() for candidate in candidates]
+
+        try:
+            _write_json_output(asyncio.run(discover()), args.output)
+        except Exception as exc:
+            print(f"补充材料发现失败: {exc}")
+            return 1
+        return 0
+    if args.supplement_cmd == "download":
+        candidate = SupplementCandidate(args.url, args.label, args.media_type)
+        output_path = Path(args.output) if args.output else (
+            paths.staging_supplements / Path(urlparse(args.url).path).name
+        )
+        if not output_path.name:
+            print("无法从 URL 推断补充文件名，请提供 --output")
+            return 2
+
+        async def download() -> dict:
+            async with httpx.AsyncClient(timeout=120) as client:
+                return await download_supplement(
+                    client, candidate, output_path, parent_doi=args.doi,
+                    overwrite=args.overwrite,
+                )
+
+        try:
+            _write_json_output(asyncio.run(download()), "")
+        except Exception as exc:
+            print(f"补充材料下载失败: {exc}")
+            return 1
+        return 0
+    print("缺少 supplement 子命令")
+    return 2
+
+
+def cmd_cellulase(args: argparse.Namespace) -> int:
+    from litlib.cellulase import (
+        load_jsonl,
+        normalize_records,
+        select_maxima,
+        validate_jsonl,
+        write_jsonl,
+    )
+
+    if args.cellulase_cmd == "validate":
+        result = validate_jsonl(args.input)
+        _write_json_output(result, args.output)
+        return 0 if result["valid"] else 1
+    if args.cellulase_cmd == "maxima":
+        try:
+            records = normalize_records(load_jsonl(args.input))
+            maxima = select_maxima(records)
+            write_jsonl(args.output, maxima)
+            print(f"最大值记录: {len(maxima)} -> {args.output}")
+            return 0
+        except Exception as exc:
+            print(f"最大值筛选失败: {exc}")
+            return 1
+    print("缺少 cellulase 子命令")
+    return 2
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="litlib", description="个人文献库系统")
     p.add_argument("--version", action="version", version=__version__)
@@ -712,6 +849,39 @@ def build_parser() -> argparse.ArgumentParser:
     learn_add.add_argument("--doi-prefix", default="", help="DOI 前缀，如 10.1021")
     learn_remove = lrsub.add_parser("remove", help="按 id 删除一条经验")
     learn_remove.add_argument("id", help="经验 id（learn list 可见）")
+
+    up = sub.add_parser("uniprot", help="获取 UniProt 条目、序列和关联文献")
+    up.add_argument("accessions", nargs="+", help="UniProt accession，可一次提供多个")
+    up.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
+    up.add_argument("--queue", action="store_true", help="将条目关联的 DOI/PMID/PMCID 加入任务队列")
+
+    ev = sub.add_parser("evidence", help="扫描论文 PDF 的目标字段与补充材料/图表线索")
+    evsub = ev.add_subparsers(dest="evidence_cmd")
+    evscan = evsub.add_parser("scan", help="扫描一个 PDF")
+    evscan.add_argument("pdf", help="正文 PDF 路径")
+    evscan.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
+
+    sp = sub.add_parser("supplement", help="发现或下载补充材料/Source Data")
+    spsub = sp.add_subparsers(dest="supplement_cmd")
+    spdiscover = spsub.add_parser("discover", help="扫描文章页的补充材料链接")
+    spdiscover.add_argument("article_url", help="文章页 URL")
+    spdiscover.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
+    spdownload = spsub.add_parser("download", help="下载并校验一个补充文件")
+    spdownload.add_argument("url", help="补充文件 URL")
+    spdownload.add_argument("--output", "-o", default="", help="本地输出路径（默认 staging/supplements）")
+    spdownload.add_argument("--doi", default="", help="主论文 DOI")
+    spdownload.add_argument("--label", default="supplement", help="文件标签")
+    spdownload.add_argument("--media-type", default="", help="HTTP media type")
+    spdownload.add_argument("--overwrite", action="store_true", help="显式允许覆盖")
+
+    ce = sub.add_parser("cellulase", help="纤维素酶结构化记录工具")
+    cesub = ce.add_subparsers(dest="cellulase_cmd")
+    cevalidate = cesub.add_parser("validate", help="验证 JSONL 记录和缺失状态")
+    cevalidate.add_argument("input", help="CellulaseMeasurement JSONL")
+    cevalidate.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
+    cemax = cesub.add_parser("maxima", help="按构建体/底物/指标/单位选择最大观测值")
+    cemax.add_argument("input", help="CellulaseMeasurement JSONL")
+    cemax.add_argument("--output", "-o", required=True, help="最大值 JSONL 输出路径")
     return p
 
 
@@ -752,6 +922,17 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_import(args)
     if args.cmd == "learn":
         return cmd_learn(args)
+    if args.cmd == "uniprot":
+        return cmd_uniprot(args)
+    if args.cmd == "evidence":
+        if args.evidence_cmd == "scan":
+            return cmd_evidence(args)
+        print("缺少 evidence 子命令")
+        return 2
+    if args.cmd == "supplement":
+        return cmd_supplement(args)
+    if args.cmd == "cellulase":
+        return cmd_cellulase(args)
     print("缺少命令。可用: doctor, queue add, status, run, download, proposal, review, import, mcp")
     return 2
 

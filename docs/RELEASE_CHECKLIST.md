@@ -8,6 +8,8 @@
   tokens, and signed URLs.
 - [ ] Confirm `IMPLEMENTATION_PLAN.md` and local WebVPN experiment scripts remain untracked.
 - [ ] Confirm all test fixtures are synthetic and contain no protected article text.
+- [ ] Confirm enzyme-data schemas retain DOI/page/table/figure/supplement evidence locations
+  and do not silently fill missing conditions.
 
 ## Metadata and Legal
 
@@ -27,6 +29,10 @@
 - [ ] Install the built wheel in a clean temporary environment and run `litlib --version`.
 - [ ] `litlib learn list` runs from the clean wheel install and reports an empty library
   without error (personal experience is runtime-local, never packaged).
+- [ ] `litlib uniprot`, `litlib evidence scan`, `litlib supplement discover`, and
+  `litlib cellulase validate/maxima` pass local smoke tests without a live publisher session.
+- [ ] Supplementary artifacts use `staging/supplements`, have a sanitized manifest, and are
+  never confused with the primary article PDF.
 - [ ] Validate OpenCode and Codex config examples on clean client restarts.
 - [ ] Distribute the entire skill directory and verify references resolve.
 - [ ] Run one OA smoke test with a redistributable test DOI.

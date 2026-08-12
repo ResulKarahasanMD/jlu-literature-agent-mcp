@@ -54,6 +54,7 @@ class Paths:
     sqlite_dir: Path = PROJECT_ROOT / "state"
     sqlite_db: Path = PROJECT_ROOT / "state" / "litlib.db"
     staging_downloads: Path = PROJECT_ROOT / "staging" / "downloads"
+    staging_supplements: Path = PROJECT_ROOT / "staging" / "supplements"
     output: Path = PROJECT_ROOT / "output"
     logs: Path = PROJECT_ROOT / "logs"
     data: Path = PROJECT_ROOT / "data"
@@ -111,7 +112,8 @@ def ensure_storage_path(path: Path | str) -> None:
 
 def ensure_dirs(paths: Paths) -> None:
     dirs = [
-        paths.sqlite_dir, paths.staging_downloads, paths.output, paths.logs,
+        paths.sqlite_dir, paths.staging_downloads, paths.staging_supplements,
+        paths.output, paths.logs,
         paths.data, paths.tmp, paths.cache, paths.models,
         paths.chrome_profile, paths.chrome_cache, paths.chrome_downloads,
         paths.runtime_root / "experience",

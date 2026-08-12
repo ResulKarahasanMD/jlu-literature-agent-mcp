@@ -116,6 +116,10 @@ Agent 不得自动通过：CAPTCHA、Turnstile、CNKI slider、OTP、购买页�
   `learn add` 的 note 或 URL pattern。
 - 个人经验只加速检索决策，不改变合规边界：任何经验条目都不能授权绕过付费墙、验证码、
   限流或不支持的 CARSI SP。
+- 纤维素酶数据默认规则：按构建体 × 底物 × 指标族 × 单位 × assay method 选择最大观测值；
+  不跨底物或不可比单位竞争。突变体/截短体只有在明确序列或可由明确突变/边界严格重建时
+  才进入正式数据集。图表估读须标记 `digitized`，无真值时只能报告不确定度/重复性，不能
+  声称真实误差百分比。
 - 清理错误经验：`litlib learn remove <id>`。
 
 ## 输出要求

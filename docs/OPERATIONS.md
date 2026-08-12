@@ -82,6 +82,30 @@ PAYWALLED / HUMAN_REQUIRED / RATE_LIMITED / FAILED are never recorded.
 Personal experience lives outside the repository (git-ignored) and is per-user/per-machine.
 If the JSON is corrupted it is ignored and read as empty; deleting the file resets learning.
 
+## Enzyme Evidence Preparation
+
+The optional cellulase data layer starts from a UniProt accession and keeps article acquisition
+separate from extraction:
+
+```powershell
+uv run litlib uniprot <accession> --output output\uniprot.json
+uv run litlib evidence scan <verified-paper.pdf>
+uv run litlib supplement discover <article-url>
+uv run litlib supplement download <supplement-url> --doi <parent-doi>
+uv run litlib cellulase validate <measurements.jsonl>
+uv run litlib cellulase maxima <measurements.jsonl> --output <maxima.jsonl>
+```
+
+Supplementary artifacts go to `staging/supplements` by default and are recorded in
+`output/supplement_manifest.jsonl`; they are never mixed with the primary article PDF. The
+evidence scan only creates triage signals for missing fields, figures, tables, and supplement
+references. It does not claim that a field is absent from an image. External multimodal review
+should be invoked only for the resulting image queue, not for every paper.
+
+Cellulase maxima are selected per construct × normalized substrate × metric family × unit ×
+assay method. Missing fields, relative activity, digitized values, and inferred construct
+sequences remain explicitly labelled for later review.
+
 ## Upgrade
 
 ```powershell

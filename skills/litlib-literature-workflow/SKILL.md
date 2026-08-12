@@ -5,7 +5,7 @@ license: MIT
 compatibility: Windows 10/11; Python 3.11-3.13; uv; Zotero 8/9; Jilin University routes are institution-specific.
 metadata:
   author: LitLib contributors
-  version: "0.2.0"
+  version: "0.3.0"
 ---
 
 # LitLib Literature Workflow
@@ -247,6 +247,45 @@ local, private experience library (`litlib learn`) that grows automatically:
 
 Personal experience is a retrieval aid only. It never authorizes bypassing a paywall,
 CAPTCHA, rate limit, or unsupported CARSI service provider.
+
+## UniProt and Enzyme-Data Workflow
+
+When the user provides UniProt accessions and requests enzyme/cellulase measurements, keep
+acquisition separate from extraction:
+
+1. Run `litlib uniprot <accession> --output <json>` to preserve the canonical sequence,
+   organism, enzyme metadata, and linked DOI/PMID/PMCID references. `--queue` may add those
+   identifiers to the LitLib task queue after the accession output has been inspected.
+2. Acquire and verify the primary papers with the normal OA/institutional workflow. Do not
+   infer that a UniProt citation contains an activity measurement until the paper is read.
+3. Run `litlib evidence scan <verified.pdf>`. This is triage only: it reports target-field
+   pages, figure/table references, supplement references, and missing text evidence. It does
+   not prove that an image lacks a value.
+4. If the article points to supplementary information or source data, run
+   `litlib supplement discover <article-url>` and download only the required artifact. Files
+   are stored separately under `staging/supplements` and recorded in a sanitized manifest.
+5. Store enzyme measurements as JSONL using the cellulase schema. A record may have missing
+   fields, but must preserve raw units, normalized substrate, assay conditions, DOI and page/
+   table/figure/supplement evidence locations.
+6. Run `litlib cellulase validate <measurements.jsonl>` before using the data and
+   `litlib cellulase maxima <measurements.jsonl> --output <maxima.jsonl>` to select maxima.
+
+Default maximum rule: compare only within the same construct sequence, normalized substrate,
+metric family, standardized unit, and assay method. The same enzyme may therefore have multiple
+maximum records for different substrates. Do not combine `U/mL`, `U/mg`, relative activity,
+`kcat`, `Km`, and `kcat/Km` into one ranking. Relative activity without a same-assay absolute
+anchor remains a separate candidate record; it is never silently converted.
+
+Mutants and truncations are eligible only when the experimental construct is explicit or its
+sequence can be reconstructed from an exact reference sequence plus unambiguous mutations and
+residue boundaries. Otherwise mark the construct unresolved and exclude it from the formal
+training set.
+
+For image-only values, first use text, table, and source-data routes. Generate a small image
+review queue only for pages flagged by evidence triage. A digitized value must be marked
+`digitized`; when no ground truth exists, report reproducibility/uncertainty rather than claiming
+an exact error percentage. Use an external multimodal model only for the selected crop/panel,
+not for every full paper.
 
 ## References
 

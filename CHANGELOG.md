@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 - 2026-08-12
+
+- Added UniProt accession lookup with sequence, enzyme metadata, and linked DOI/PMID/PMCID
+  references.
+- Added conservative PDF evidence triage for target fields, figures, tables, and supplementary
+  material references.
+- Added supplementary artifact discovery/download/validation with a separate staging directory
+  and sanitized JSONL manifest.
+- Added cellulase measurement schema and maximum-observed selection grouped by construct,
+  substrate, metric family, unit, and assay method; missing fields and digitized evidence remain
+  explicit instead of being silently filled.
+- Added safe substrate aliases and only unambiguous unit conversions; relative activity is not
+  silently converted to absolute activity.
+
 ## 0.2.1 - 2026-08-06
 
 - Added the personal experience library (`litlib learn list | add | remove | export`):

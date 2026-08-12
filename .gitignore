@@ -12,6 +12,7 @@ venv/
 # 项目数据（不进 git）
 data/
 staging/
+staging/supplements/
 state/
 logs/
 output/
