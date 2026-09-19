@@ -91,13 +91,122 @@ async def test_preflight_requires_probe_url(monkeypatch):
 @pytest.mark.parametrize(("status", "fixture", "expected"), [
     (200, "sciencedirect_access.html", True),
     (200, "sciencedirect_no_access.html", False),
-    (403, "sciencedirect_access.html", False),
 ])
 async def test_preflight_uses_publisher_attribution(monkeypatch, status, fixture, expected):
     monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
     async with _client(status, _fixture(fixture)) as client:
         ok, _ = await bvu.vpn_preflight(client)
     assert ok is expected
+
+
+# ---- CDP browser fallback when httpx hits an anti-bot wall -------------------
+
+class FakeTab:
+    """Stands in for chrome_cdp.Tab; serves a fixture as the rendered page."""
+
+    def __init__(self, html: str):
+        self.html = html
+        self.closed = self.closed_target = False
+
+    async def connect(self):
+        return None
+
+    async def cmd(self, method, params=None):
+        expression = (params or {}).get("expression", "")
+        if "outerHTML" in expression:
+            return {"result": {"value": self.html}}
+        text = bvu.re.sub(r"<[^>]+>", " ", self.html)  # what wait_for_human_challenge reads
+        return {"result": {"value": text}}
+
+    async def close(self):
+        self.closed = True
+
+    async def close_target(self):
+        self.closed_target = True
+
+
+@pytest.fixture()
+def fake_cdp(monkeypatch):
+    opened: list[str] = []
+    tab = FakeTab(_fixture("sciencedirect_access.html"))
+
+    async def wait_for_cdp(timeout=0):
+        return "ws://browser"
+
+    async def create_tab_navigate(url, timeout=0):
+        opened.append(url)
+        return "ws://page"
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
+    monkeypatch.setattr(bvu.chrome_cdp, "wait_for_cdp", wait_for_cdp)
+    monkeypatch.setattr(bvu.chrome_cdp, "create_tab_navigate", create_tab_navigate)
+    monkeypatch.setattr(bvu.chrome_cdp, "Tab", lambda _ws: tab)
+    monkeypatch.setattr(bvu.asyncio, "sleep", no_sleep)
+    return SimpleNamespace(opened=opened, tab=tab)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [403, 503, 200])
+async def test_cloudflare_challenge_falls_back_to_cdp_browser(fake_cdp, status):
+    async with _client(status, _fixture("cloudflare_challenge.html")) as client:
+        ok, evidence = await bvu.vpn_preflight(client)
+    assert ok, evidence
+    assert "Bezmialem" in evidence and evidence.endswith("(via browser)")
+    assert fake_cdp.opened == [PROBE_URL]
+    assert fake_cdp.tab.closed_target and not fake_cdp.tab.closed
+
+
+@pytest.mark.asyncio
+async def test_browser_fallback_without_access_attribution_fails(fake_cdp):
+    fake_cdp.tab.html = _fixture("sciencedirect_no_access.html")
+    async with _client(403, _fixture("cloudflare_challenge.html")) as client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert not ok and "no BVU access attribution" in reason
+
+
+@pytest.mark.asyncio
+async def test_unsolved_challenge_waits_for_human_and_keeps_tab(monkeypatch, fake_cdp):
+    waited: list[bool] = []
+
+    async def human_did_not_finish(_tab):
+        waited.append(True)
+        return False
+
+    monkeypatch.setattr("litlib.inst_login.wait_for_human_challenge", human_did_not_finish)
+    async with _client(403, _fixture("cloudflare_challenge.html")) as client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert not ok and reason.startswith("HUMAN_REQUIRED")
+    assert waited == [True]
+    assert fake_cdp.tab.closed and not fake_cdp.tab.closed_target
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("status", "fixture"), [
+    (200, "sciencedirect_no_access.html"),   # genuine "no access" is not retried in Chrome
+    (429, "cloudflare_challenge.html"),      # rate limit stops, never escalates
+])
+async def test_no_browser_escalation(fake_cdp, status, fixture):
+    async with _client(status, _fixture(fixture)) as client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert not ok
+    assert fake_cdp.opened == []
+    if status == 429:
+        assert reason.startswith("RATE_LIMITED")
+
+
+@pytest.mark.asyncio
+async def test_browser_fallback_reports_missing_dedicated_chrome(monkeypatch):
+    async def cdp_down(timeout=0):
+        raise TimeoutError
+
+    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
+    monkeypatch.setattr(bvu.chrome_cdp, "wait_for_cdp", cdp_down)
+    async with _client(403, _fixture("cloudflare_challenge.html")) as client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert not ok and "litlib inst open" in reason
 
 
 # ---- run_inst behaviour under BVU -------------------------------------------

@@ -289,7 +289,8 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
             ok, evidence = await bvu.vpn_preflight(client)
             if not ok:
                 stats["paused"] = len(tasks)
-                print(f"HUMAN_REQUIRED: {evidence}")
+                coded = evidence.startswith(("HUMAN_REQUIRED", "RATE_LIMITED"))
+                print(evidence if coded else f"HUMAN_REQUIRED: {evidence}")
                 print("  GlobalProtect'e bağlanıp tekrar çalıştırın; görevler REQUIRES_INST'te kaldı")
                 return stats
             print(f"BVU erişimi doğrulandı: {evidence}")
