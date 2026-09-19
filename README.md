@@ -94,6 +94,33 @@ uv run litlib inst close
 遇到 Turnstile、滑块、OTP 或 CAPTCHA 时，程序必须暂停并由用户在可见专用浏览器完成。
 出版社明确显示购买/租赁/HTML-only 时停止，不把登录成功等同于拥有 PDF 权限。
 
+### BVU (GlobalProtect)
+
+Fork addition for Bezmialem Vakif University on macOS (uv, Python 3.12). Off-campus
+access is IP-based through the Palo Alto GlobalProtect VPN, so no password is stored or
+used by LitLib and the JLU WebVPN gateway / IdP login routes are skipped. Batch limits,
+pacing and the human checkpoint stop are unchanged. Set in the git-ignored `.env`:
+
+```sh
+LITLIB_INSTITUTION=bvu
+LITLIB_BVU_PROBE_URL=https://doi.org/<a BVU-subscribed article>
+```
+
+Before each batch the probe page must name Bezmialem as the access provider (httpx first;
+on 403/503 or an anti-bot page, the already-open dedicated Chrome, with the usual human
+wait). Otherwise the batch pauses and tasks stay `REQUIRES_INST`.
+
+Live check, 2026-09-19, off campus via GlobalProtect (`litlib run --stage inst
+--access-mode campus`):
+
+| DOI | Route | Pages / text chars | SHA-256 |
+|---|---|---|---|
+| `10.1038/s41586-025-08610-1` (Nature 639:360) | `direct-httpx` | 11 / 56115 | `f2ed3cce730b4905f33252003e0ee0227de448ee7df6e7d98779f705566f6f80` |
+
+The PDF (24,225,537 B) passed `validate_pdf_for_work` with a DOI match and `litlib run
+--stage verify` (1/1). A newer unedited-manuscript article (`10.1038/s41586-026-11123-0`)
+showed BVU access but had no main-text PDF yet, and was correctly rejected as non-PDF.
+
 ### CNKI
 
 ```powershell
