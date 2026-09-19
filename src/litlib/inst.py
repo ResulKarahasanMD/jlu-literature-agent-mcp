@@ -24,7 +24,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from litlib import chrome_cdp
+from litlib import bvu, chrome_cdp
 from litlib.config import paths
 from litlib.download import download_to_file
 from litlib.logging_setup import sanitize, sanitize_payload
@@ -282,7 +282,17 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
     tokens = load_tokens()
     print(f"已登记 token: {list(tokens.keys()) or '无'}")
     cookies: dict[str, str] | None = None
+    # BVU (GlobalProtect VPN) only uses the direct routes; JLU gateway/IdP login are skipped.
+    jlu_routes = not bvu.is_active()
     async with httpx.AsyncClient(timeout=120) as client:
+        if not jlu_routes:
+            ok, evidence = await bvu.vpn_preflight(client)
+            if not ok:
+                stats["paused"] = len(tasks)
+                print(f"HUMAN_REQUIRED: {evidence}")
+                print("  GlobalProtect'e bağlanıp tekrar çalıştırın; görevler REQUIRES_INST'te kaldı")
+                return stats
+            print(f"BVU erişimi doğrulandı: {evidence}")
         for t in tasks:
             work = st.get_work(t["work_id"])
             stats["processed"] += 1
@@ -474,14 +484,14 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
 
                 # 可选路线：已有 WebVPN ticket + 当前 publisher token 时才尝试，不再阻断后续登录。
                 url = gateway_url(tokens, domain, path) if domain and path else None
-                if (info is None and access_mode == "offcampus" and not rate_limited
-                        and not paywalled_route and not human_checkpoint):
+                if (info is None and jlu_routes and access_mode == "offcampus"
+                        and not rate_limited and not paywalled_route and not human_checkpoint):
                     info = await try_login()
-                if (info is None and access_mode != "campus" and not rate_limited
-                        and not paywalled_route and not human_checkpoint):
+                if (info is None and jlu_routes and access_mode != "campus"
+                        and not rate_limited and not paywalled_route and not human_checkpoint):
                     info = await try_gateway()
-                if (info is None and access_mode != "offcampus" and not rate_limited
-                        and not paywalled_route and not human_checkpoint):
+                if (info is None and jlu_routes and access_mode != "offcampus"
+                        and not rate_limited and not paywalled_route and not human_checkpoint):
                     info = await try_login()
                 if info is None:
                     if paywalled_route:

@@ -8,8 +8,18 @@
 from __future__ import annotations
 
 import ctypes
+import os
 from ctypes import wintypes
 from pathlib import Path
+
+# Credential Manager and DPAPI exist only on Windows. Elsewhere (macOS BVU/GlobalProtect
+# setup) no institution password is used: reads report "no credential", writes fail loudly.
+IS_WINDOWS = os.name == "nt"
+
+
+def _require_windows(feature: str) -> None:
+    if not IS_WINDOWS:
+        raise OSError(f"{feature} is only available on Windows")
 
 # ---- Windows 凭据管理器 -------------------------------------------------
 
@@ -35,6 +45,7 @@ class CREDENTIAL(ctypes.Structure):
 
 
 def save_cred(service: str, username: str, password: str) -> None:
+    _require_windows("Credential Manager")
     blob = (ctypes.c_byte * len(password.encode("utf-16-le")))(
         *password.encode("utf-16-le")
     )
@@ -54,6 +65,8 @@ def save_cred(service: str, username: str, password: str) -> None:
 
 
 def load_cred(service: str) -> tuple[str, str] | None:
+    if not IS_WINDOWS:
+        return None
     handle = ctypes.c_void_p()
     ok = ctypes.windll.advapi32.CredReadW(
         service, CRED_TYPE_GENERIC, 0, ctypes.byref(handle)
@@ -71,6 +84,8 @@ def load_cred(service: str) -> tuple[str, str] | None:
 
 
 def delete_cred(service: str) -> bool:
+    if not IS_WINDOWS:
+        return False
     ok = ctypes.windll.advapi32.CredDeleteW(service, CRED_TYPE_GENERIC, 0)
     return bool(ok)
 
@@ -85,6 +100,7 @@ class DATA_BLOB(ctypes.Structure):
 
 
 def _dpapi(data: bytes, protect: bool) -> bytes:
+    _require_windows("DPAPI")
     in_blob = DATA_BLOB(len(data), ctypes.cast(
         ctypes.create_string_buffer(data), ctypes.POINTER(ctypes.c_byte)))
     out_blob = DATA_BLOB()
