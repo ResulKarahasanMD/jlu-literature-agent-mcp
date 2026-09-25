@@ -86,3 +86,15 @@ def test_rejects_supplement_label_later_on_first_pages(tmp_path: Path):
     )
     with pytest.raises(PDFError, match="ek materyal algılandı"):
         validate_pdf_for_work(path, "10.1000/right")
+
+
+def test_accepts_arxiv_doi_via_arxiv_stamp(tmp_path: Path):
+    path = _pdf(tmp_path / "arxiv.pdf", "Attention Is All You Need\narXiv:1706.03762v7 [cs.CL] 2 Aug 2023")
+    pages, chars = validate_pdf_for_work(path, "10.48550/arXiv.1706.03762")
+    assert pages == 1 and chars > 0
+
+
+def test_rejects_arxiv_doi_with_other_arxiv_stamp(tmp_path: Path):
+    path = _pdf(tmp_path / "arxiv-wrong.pdf", "Another Paper\narXiv:1706.037621v1 [cs.CL] 1 Jan 2024")
+    with pytest.raises(PDFError, match="PDF DOI uyuşmuyor"):
+        validate_pdf_for_work(path, "10.48550/arXiv.1706.03762")

@@ -56,6 +56,7 @@ _DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+", re.I)
 _ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
 _PMID_RE = re.compile(r"\d{6,9}")
 _PMC_RE = re.compile(r"PMC\d+", re.I)
+_ARXIV_DOI_RE = re.compile(r"10\.48550/arxiv\.(.+)")
 
 
 def normalize_doi(value: str) -> str:
@@ -64,6 +65,14 @@ def normalize_doi(value: str) -> str:
     value = re.sub(r"^doi\s*:\s*", "", value, flags=re.I)
     value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value, flags=re.I)
     return value.rstrip(".,;").lower()
+
+
+def arxiv_id_from_doi(doi: str | None) -> str | None:
+    """arXiv'in DataCite DOI'si (10.48550/arXiv.<id>) → arXiv ID; diğer DOI'lerde None döndürür."""
+    if not doi:
+        return None
+    m = _ARXIV_DOI_RE.fullmatch(normalize_doi(doi))
+    return m.group(1) if m else None
 
 
 def normalize_identity_text(value: str) -> str:

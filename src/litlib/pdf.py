@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from litlib.models import normalize_doi
+from litlib.models import arxiv_id_from_doi, normalize_doi
 
 
 class PDFError(Exception):
@@ -26,6 +26,11 @@ def _doi_in_text(doi: str, text: str) -> bool:
     """DOI'nin kendisini eşler; PDF metin çıkarımının DOI içine satır sonu eklemesine izin verir."""
     pattern = r"\s*".join(re.escape(char) for char in doi)
     return bool(re.search(pattern, text, re.I))
+
+
+def _arxiv_stamp_in_text(arxiv_id: str, text: str) -> bool:
+    """arXiv PDF kenar damgası (arXiv:<id>v<n>) DOI içermez; kimlik kanıtı olarak birebir aynı arXiv ID'si aranır."""
+    return bool(re.search(rf"arXiv:\s*{re.escape(arxiv_id)}(?:v\d+)?(?![\d.])", text, re.I))
 
 
 def validate_pdf(path: Path | str) -> tuple[int, int]:
@@ -68,6 +73,9 @@ def validate_pdf_for_work(path: Path | str, doi: str | None = None) -> tuple[int
 
     if _SUPPLEMENT_RE.search(first_text[:5_000]):
         raise PDFError("ek materyal algılandı, ana metin PDF'i değil")
+    arxiv_id = arxiv_id_from_doi(doi)
+    if arxiv_id and _arxiv_stamp_in_text(arxiv_id, first_page_text):
+        return n_pages, chars
     if doi:
         expected = normalize_doi(doi)
         first_page_found = {

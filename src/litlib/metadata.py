@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from litlib.models import Work
+from litlib.models import Work, arxiv_id_from_doi
 
 CROSSREF_BASE = "https://api.crossref.org/works"
 EUTILS_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
@@ -295,9 +295,10 @@ async def fetch_metadata(client: httpx.AsyncClient, work: Work) -> Work:
             result = merge_work(result, await resolve_by_pmcid(client, work.pmcid))
         except (httpx.HTTPError, ValueError):
             result = Work()
-    if not result.title and work.arxiv:
+    arxiv = work.arxiv or arxiv_id_from_doi(work.doi)
+    if not result.title and arxiv:
         try:
-            result = merge_work(result, await resolve_by_arxiv(client, work.arxiv))
+            result = merge_work(result, await resolve_by_arxiv(client, arxiv))
         except (httpx.HTTPError, ValueError, ET.ParseError):
             result = Work()
     if result.doi and not (result.pmid or result.pmcid):
@@ -312,6 +313,7 @@ async def fetch_metadata(client: httpx.AsyncClient, work: Work) -> Work:
         if found.title:
             result = merge_work(result, found)
     if result.title:
+        result.arxiv = result.arxiv or arxiv or arxiv_id_from_doi(result.doi)
         result.work_id = work.work_id
         result.created_at = work.created_at
         result.updated_at = work.updated_at

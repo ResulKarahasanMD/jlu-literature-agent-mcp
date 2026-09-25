@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from litlib.models import Work
+from litlib.models import Work, arxiv_id_from_doi
 
 UNPAYWALL_BASE = "https://api.unpaywall.org/v2"
 EUROPE_PMC_BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest"
@@ -86,9 +86,10 @@ async def unpaywall(client: httpx.AsyncClient, work: Work) -> OAResult:
 
 
 async def arxiv_direct(client: httpx.AsyncClient, work: Work) -> OAResult:
-    if not work.arxiv:
+    arxiv = work.arxiv or arxiv_id_from_doi(work.doi)
+    if not arxiv:
         return OAResult(False, note="arXiv ID yok")
-    return OAResult(True, url=f"https://arxiv.org/pdf/{work.arxiv}", channel="arxiv")
+    return OAResult(True, url=f"https://arxiv.org/pdf/{arxiv}", channel="arxiv")
 
 
 async def mdpi_static_pdf(client: httpx.AsyncClient, work: Work) -> OAResult:
