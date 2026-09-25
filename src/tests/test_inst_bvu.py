@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+import ssl
 from pathlib import Path
 from types import SimpleNamespace
 
 import httpx
 import pytest
 
-from litlib import bvu, inst
+from litlib import bvu, inst, transport_retry
 from litlib.inst import BATCH_LIMIT, DELAY, run_inst
 from litlib.models import TaskState
 from litlib.pdf import PDFError
@@ -17,6 +19,7 @@ from litlib.state import State
 FIXTURES = Path(__file__).parent / "fixtures" / "bvu"
 PROBE_URL = "https://www.sciencedirect.test/science/article/pii/EXAMPLE"
 ELSEVIER_DOIS = ["10.1016/j.example.2024.000001", "10.1016/j.example.2024.000002"]
+DNS_ERROR = "[Errno 8] nodename nor servname provided, or not known"
 
 
 def _fixture(name: str) -> str:
@@ -26,6 +29,27 @@ def _fixture(name: str) -> str:
 def _client(status: int, body: str) -> httpx.AsyncClient:
     return httpx.AsyncClient(transport=httpx.MockTransport(
         lambda request: httpx.Response(status, text=body)))
+
+
+def _flaky_client(errors: list[Exception], status: int, body: str,
+                  ) -> tuple[httpx.AsyncClient, list[httpx.Request]]:
+    """İlk istekler `errors` sırasıyla fırlatılır, sonrakiler (status, body) alır; istekler kaydedilir."""
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if errors:
+            raise errors.pop(0)
+        return httpx.Response(status, text=body)
+
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler)), requests
+
+
+def _certificate_error() -> httpx.ConnectError:
+    """httpx sertifika hatasını da ConnectError olarak sarar; kalıcıdır, yeniden denenmemeli."""
+    error = httpx.ConnectError("certificate verify failed")
+    error.__cause__ = ssl.SSLCertVerificationError("certificate verify failed")
+    return error
 
 
 async def _raise(*_args, **_kwargs):
@@ -126,119 +150,6 @@ def test_jstor_ekual_page_is_not_bvu_evidence(monkeypatch):
     assert bvu.detect_institutional_access(_fixture("jstor_ekual.html")) == ""
 
 
-# ---- geçici DNS/bağlantı hatalarında yeniden deneme ---------------------------------
-
-def _flaky_client(failures: list[Exception], body: str, calls: list[int]) -> httpx.AsyncClient:
-    """İlk len(failures) istekte sırayla o hataları fırlatır, sonra 200 döner."""
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(1)
-        if failures:
-            raise failures.pop(0)
-        return httpx.Response(200, text=body)
-    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
-
-
-@pytest.fixture()
-def no_sleep(monkeypatch):
-    sleeps: list[float] = []
-
-    async def fake_sleep(seconds):
-        sleeps.append(seconds)
-    monkeypatch.setattr(bvu.asyncio, "sleep", fake_sleep)
-    return sleeps
-
-
-@pytest.mark.asyncio
-async def test_preflight_retries_transient_dns_error(monkeypatch, no_sleep):
-    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
-    calls: list[int] = []
-    errors = [httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known"),
-              httpx.ConnectTimeout("timed out")]
-    async with _flaky_client(errors, _fixture("sciencedirect_access.html"), calls) as client:
-        ok, evidence = await bvu.vpn_preflight(client)
-    assert ok and "Bezmialem" in evidence
-    assert len(calls) == 3
-    assert no_sleep == [bvu.RETRY_BACKOFF_SECONDS * 1, bvu.RETRY_BACKOFF_SECONDS * 2]
-
-
-@pytest.mark.asyncio
-async def test_preflight_gives_up_after_bounded_retries(monkeypatch, no_sleep):
-    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
-    calls: list[int] = []
-    errors = [httpx.ConnectError("dns") for _ in range(bvu.TRANSIENT_RETRIES + 2)]
-    async with _flaky_client(errors, "", calls) as client:
-        ok, reason = await bvu.vpn_preflight(client)
-    assert ok is False and reason == "probe request failed: ConnectError"
-    assert len(calls) == bvu.TRANSIENT_RETRIES
-
-
-@pytest.mark.asyncio
-async def test_preflight_does_not_retry_certificate_errors(monkeypatch, no_sleep):
-    import ssl
-    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
-    calls: list[int] = []
-    exc = httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
-    exc.__cause__ = ssl.SSLCertVerificationError("certificate verify failed")
-    async with _flaky_client([exc], _fixture("sciencedirect_access.html"), calls) as client:
-        ok, reason = await bvu.vpn_preflight(client)
-    assert ok is False and reason == "probe request failed: ConnectError"
-    assert len(calls) == 1 and no_sleep == []
-
-
-def test_transient_classification():
-    assert bvu.is_transient_transport_error(httpx.ConnectError("[Errno 8] nodename nor servname"))
-    assert bvu.is_transient_transport_error(httpx.ReadTimeout("slow"))
-    assert not bvu.is_transient_transport_error(httpx.ConnectError("CERTIFICATE_VERIFY_FAILED"))
-    assert not bvu.is_transient_transport_error(httpx.HTTPStatusError(
-        "403", request=httpx.Request("GET", PROBE_URL), response=httpx.Response(403)))
-
-
-@pytest.mark.asyncio
-async def test_download_retries_before_first_byte(monkeypatch, tmp_path):
-    from litlib import download
-    sleeps: list[float] = []
-
-    async def fake_sleep(seconds):
-        sleeps.append(seconds)
-    monkeypatch.setattr(download.asyncio, "sleep", fake_sleep)
-    calls: list[int] = []
-    body = "%PDF-1.4 test"
-    async with _flaky_client([httpx.ConnectError("[Errno 8] nodename nor servname")], body, calls) as client:
-        dest, digest, size = await download.download_to_file(client, PROBE_URL, tmp_path / "a.pdf")
-    assert dest.read_text() == body and size == len(body) and len(digest) == 64
-    assert len(calls) == 2 and sleeps == [download.RETRY_BACKOFF_SECONDS]
-    assert not (tmp_path / "a.pdf.part").exists()
-
-
-@pytest.mark.asyncio
-async def test_download_does_not_retry_after_bytes_received(monkeypatch, tmp_path):
-    from litlib import download
-    monkeypatch.setattr(download.asyncio, "sleep", pytest.fail)  # uyku = yeniden deneme = hata
-    calls: list[int] = []
-
-    async def broken_body():
-        yield b"%PDF-1.4 partial"
-        raise httpx.ReadError("connection reset")
-
-    def handler(request: httpx.Request) -> httpx.Response:
-        calls.append(1)
-        return httpx.Response(200, stream=_AsyncGenStream(broken_body()))
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(httpx.ReadError):
-            await download.download_to_file(client, PROBE_URL, tmp_path / "b.pdf")
-    assert len(calls) == 1
-    assert not (tmp_path / "b.pdf.part").exists()
-
-
-class _AsyncGenStream(httpx.AsyncByteStream):
-    def __init__(self, gen):
-        self._gen = gen
-
-    async def __aiter__(self):
-        async for chunk in self._gen:
-            yield chunk
-
-
 def test_access_pattern_env_override(monkeypatch):
     monkeypatch.setenv("LITLIB_BVU_ACCESS_PATTERN", "Ornek Universitesi")
     assert bvu.detect_institutional_access("<p>Access via Ornek Universitesi</p>")
@@ -263,6 +174,58 @@ async def test_preflight_uses_publisher_attribution(monkeypatch, status, fixture
     async with _client(status, _fixture(fixture)) as client:
         ok, _ = await bvu.vpn_preflight(client)
     assert ok is expected
+
+
+# ---- GlobalProtect DNS'i (10.100.4.211) ara sıra zaman aşımına düşer: sınırlı yeniden deneme ----
+
+@pytest.fixture()
+def fast_retry(monkeypatch):
+    """Yeniden deneme aralarını sıfırlar; deneme sayısı (4) değişmez."""
+    monkeypatch.setattr(
+        transport_retry, "RETRY_DELAYS", (0.0,) * len(transport_retry.RETRY_DELAYS))
+    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
+
+
+@pytest.mark.asyncio
+async def test_preflight_retries_transient_dns_failure(fast_retry, caplog):
+    caplog.set_level(logging.WARNING, logger="litlib.transport_retry")
+    client, requests = _flaky_client(
+        [httpx.ConnectError(DNS_ERROR)], 200, _fixture("sciencedirect_access.html"))
+    async with client:
+        ok, evidence = await bvu.vpn_preflight(client)
+    assert ok, evidence
+    assert "Bezmialem" in evidence
+    assert len(requests) == 2
+    [record] = [r for r in caplog.records if r.name == "litlib.transport_retry"]
+    assert PROBE_URL in record.getMessage() and DNS_ERROR in record.getMessage()
+
+
+@pytest.mark.asyncio
+async def test_preflight_gives_up_after_four_attempts(fast_retry):
+    client, requests = _flaky_client([httpx.ConnectError(DNS_ERROR)] * 10, 200, "")
+    async with client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert not ok and reason == "probe request failed: ConnectError"
+    assert len(requests) == 4
+
+
+@pytest.mark.asyncio
+async def test_preflight_does_not_retry_certificate_errors(fast_retry):
+    client, requests = _flaky_client([_certificate_error()] * 10, 200, "")
+    async with client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert not ok and reason == "probe request failed: ConnectError"
+    assert len(requests) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [429, 500])
+async def test_preflight_does_not_retry_http_status(fast_retry, status):
+    client, requests = _flaky_client([], status, "")
+    async with client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert not ok
+    assert len(requests) == 1
 
 
 # ---- httpx anti-bot duvarına takılınca CDP tarayıcısına geri düşme -------------------

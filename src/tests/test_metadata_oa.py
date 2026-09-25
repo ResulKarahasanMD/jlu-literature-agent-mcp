@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
+
 import httpx
 import pytest
 
+from litlib import transport_retry
 from litlib.download import download_to_file
 from litlib.metadata import (
     _author_parts,
@@ -315,3 +318,82 @@ class TestDownload:
             with pytest.raises(ValueError):
                 await download_to_file(client, "https://x/big.pdf", dest, max_bytes=100)
         assert not dest.exists()
+
+    # GlobalProtect DNS'i ara sıra zaman aşımına düşer: yalnız bağlantı aşaması yeniden denenir.
+
+    @pytest.fixture()
+    def fast_retry(self, monkeypatch):
+        """Yeniden deneme aralarını sıfırlar; deneme sayısı (4) değişmez."""
+        monkeypatch.setattr(
+            transport_retry, "RETRY_DELAYS", (0.0,) * len(transport_retry.RETRY_DELAYS))
+
+    @pytest.mark.asyncio
+    async def test_transient_connect_error_is_retried(self, tmp_path, fast_retry):
+        """VPN DNS'i ilk denemede düşer (ConnectError); ikinci deneme aynı dosyayı getirir."""
+        payload = b"%PDF-1.4 retried content " * 100
+        calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            if len(calls) == 1:
+                raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+            return httpx.Response(200, content=payload)
+
+        dest = tmp_path / "retry.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            final, sha, size = await download_to_file(client, "https://x/retry.pdf", dest)
+        assert final == dest and size == len(payload) and len(calls) == 2
+        assert sha == hashlib.sha256(payload).hexdigest()
+        assert not (tmp_path / "retry.pdf.part").exists()
+
+    @pytest.mark.asyncio
+    async def test_persistent_connect_error_gives_up_after_four_attempts(
+            self, tmp_path, fast_retry):
+        calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+
+        dest = tmp_path / "never.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(httpx.ConnectError):
+                await download_to_file(client, "https://x/never.pdf", dest)
+        assert len(calls) == 4
+        assert not dest.exists() and not (tmp_path / "never.pdf.part").exists()
+
+    @pytest.mark.asyncio
+    async def test_http_error_status_is_not_retried(self, tmp_path, fast_retry):
+        calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            return httpx.Response(503, text="maintenance")
+
+        dest = tmp_path / "down.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await download_to_file(client, "https://x/down.pdf", dest)
+        assert len(calls) == 1
+        assert not dest.exists() and not (tmp_path / "down.pdf.part").exists()
+
+    @pytest.mark.asyncio
+    async def test_read_error_mid_stream_is_not_retried(self, tmp_path, fast_retry):
+        """Gövde akarken kopan bağlantı yeniden denenmez: yalnız bağlantı aşaması sarılıdır."""
+        calls: list[httpx.Request] = []
+
+        class BrokenStream(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                yield b"%PDF-1.4 partial"
+                raise httpx.ReadError("connection reset while streaming")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            return httpx.Response(200, stream=BrokenStream())
+
+        dest = tmp_path / "broken.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(httpx.ReadError):
+                await download_to_file(client, "https://x/broken.pdf", dest)
+        assert len(calls) == 1
+        assert not dest.exists() and not (tmp_path / "broken.pdf.part").exists()
