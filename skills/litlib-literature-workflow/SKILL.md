@@ -87,13 +87,23 @@ değiştirmeyin.
 
 ### Tek bir DOI edinme
 
-Tek giriş noktasını kullanın. Gerekirse görev oluşturur, metadata'yı çözümler, indirir,
-doğrular ve dosyayı kaydeder:
+Açık erişim için önce aşağıdaki toplu edinme akışını tek DOI ile çalıştırın
+(`litlib queue add <DOI>` → `run --stage fetch-metadata` → `run --stage oa`).
+
+`litlib download` gerekirse görev oluşturur ve metadata'yı çözümler; ardından PDF'i
+**yalnızca özel Chrome üzerinden** (doi.org → makale sayfası → PDF bağlantısı) indirir,
+doğrular ve kaydeder. OA kanallarını denemez; önce `litlib inst open` çalıştırılmamışsa
+`CDP portu 9222 yanıt vermiyor` hatasıyla başarısız olur:
 
 ```powershell
+litlib inst open
 litlib download 10.xxxx/example
 litlib verify
+litlib inst close
 ```
+
+İndirme başarısız olursa görev `DEDUPED` durumunda kalır ve bir sonraki
+`run --stage oa` onu işler.
 
 Komut, `--overwrite` açıkça verilmedikçe mevcut bir hedefin üzerine yazmayı reddeder. PDF
 dosyası olsa bile kayıt başarısızlığı bir başarısızlıktır; başarı iddia etmek yerine dosyayı

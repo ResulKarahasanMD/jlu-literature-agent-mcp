@@ -76,7 +76,9 @@ Sonra:
 1. Mevcut kütüphane isteği: `zotseek index_status` → semantik arama → LitLib ile tam metin.
 2. Yeni konu isteği: akademik veritabanı araması → tanımlayıcılar/kaynak bilgisi → LitLib
    ile edinme.
-3. Tek DOI: `litlib download <DOI>` → `litlib verify`.
+3. Tek DOI: önce OA akışı (`queue add <DOI>` → `run --stage fetch-metadata` →
+   `run --stage oa`). `litlib download <DOI>` → `litlib verify` OA denemez; PDF'i yalnız
+   özel Chrome ile indirir, bu yüzden önce `litlib inst open` gerekir.
 4. Toplu: kuyruk → metadata → OA → yalnız `REQUIRES_INST` gözetimli kurum aşamasına girer.
 5. İçe aktarma: proposal → insanın RIS'i içe aktarması → review → `import --lookup`.
 6. Kişisel deneyim (kendini geliştiren): tanımadığınız bir siteyi denemeden önce

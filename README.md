@@ -64,14 +64,20 @@ olanlar `1` yapıp `LITLIB_RUNTIME_ROOT`'u D sürücüsüne yönlendirebilir. T�
 ### Tek DOI
 
 ```powershell
+uv run litlib inst open
 uv run litlib download 10.xxxx/example
 uv run litlib verify
 uv run litlib status --verbose
+uv run litlib inst close
 ```
 
-Bu giriş noktası otomatik olarak görev oluşturur, metadata'yı çözümler, indirir, doğrular
-ve kaydeder. Hedef dosya varsa varsayılan olarak üzerine yazmayı reddeder; `--overwrite`
-yalnız kullanıcı açıkça istediğinde kullanılır.
+Bu giriş noktası otomatik olarak görev oluşturur ve metadata'yı çözümler; ardından PDF'i
+**yalnızca özel Chrome üzerinden** (doi.org → makale sayfası → PDF bağlantısı) indirir,
+doğrular ve kaydeder. OA kanallarını denemez ve önce `litlib inst open` çalıştırılmamışsa
+`CDP portu 9222 yanıt vermiyor` hatasıyla başarısız olur. Açık erişimli makaleler için
+aşağıdaki OA akışını kullanın. İndirme başarısız olursa görev `DEDUPED` durumunda kalır ve
+bir sonraki `run --stage oa` onu işler. Hedef dosya varsa varsayılan olarak üzerine yazmayı reddeder;
+`--overwrite` yalnız kullanıcı açıkça istediğinde kullanılır.
 
 ### Toplu OA
 
