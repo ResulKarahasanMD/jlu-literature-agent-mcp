@@ -1,3 +1,3 @@
-"""litlib: 个人文献库系统（OA + 机构通道 + Zotero + Agent 只读接口）。"""
+"""litlib: kişisel literatür kütüphanesi sistemi (OA + kurum kanalı + Zotero + Agent için salt-okur arayüz)."""
 
 __version__ = "0.3.0"

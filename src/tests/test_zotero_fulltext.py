@@ -1,4 +1,4 @@
-"""测试：Zotero 只读 API（mock）与全文缓存。"""
+"""Testler: Zotero salt-okur API (mock) ve tam metin önbelleği."""
 
 from __future__ import annotations
 

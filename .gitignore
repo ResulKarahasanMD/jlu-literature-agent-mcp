@@ -9,7 +9,7 @@ venv/
 .pytest_cache/
 .ruff_cache/
 
-# 项目数据（不进 git）
+# Proje verisi (git'e girmez)
 data/
 staging/
 staging/supplements/
@@ -25,7 +25,7 @@ output/
 *.db
 *.db-*
 
-# 环境与密钥
+# Ortam ve anahtarlar
 .env
 .env.*
 !.env.example
@@ -35,18 +35,19 @@ output/
 *.bin
 !docs/SECURITY.md
 
-# 本机 WebVPN 探索脚本（包含门户资源标识，不发布）
+# Yerel WebVPN keşif betikleri (portal kaynak kimlikleri içerir, yayımlanmaz)
 scripts/tok_test.py
 scripts/token_register.py
 
-# 本机早期实施记录，包含过时路径与环境快照；公开文档已迁移到 docs/
+# Yerel erken uygulama notları, eski yollar ve ortam anlık görüntüleri içerir; açık belgeler docs/ altına taşındı
 IMPLEMENTATION_PLAN.md
 
-# 临时
+# Geçici
 *.part
 *.tmp
 Thumbs.db
+.DS_Store
 
-# 编辑器
+# Editörler
 .idea/
 .vscode/

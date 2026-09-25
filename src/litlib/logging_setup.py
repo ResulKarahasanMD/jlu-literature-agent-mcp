@@ -1,8 +1,8 @@
-"""日志基础设施：轮转 + 脱敏（§19/§27.13）。
+"""Günlük altyapısı: döndürme + maskeleme (§19/§27.13).
 
-- 单日志 ≤ 20 MB，保留 ≤ 5 个历史（RotatingFileHandler）。
-- 日志脱敏：URL 去 query 参数（token）、不记录密钥类字段。
-- 所有 litlib.* logger 挂到同一 handler；由 cli.main 统一初始化。
+- Tek günlük ≤ 20 MB, en fazla 5 eski dosya tutulur (RotatingFileHandler).
+- Günlük maskeleme: URL'lerden query parametreleri (token) atılır, anahtar türü alanlar kaydedilmez.
+- Tüm litlib.* logger'lar aynı handler'a bağlanır; cli.main tek noktadan başlatır.
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ _WEBVPN_TOKEN_RE = re.compile(
 
 
 def sanitize(message: str) -> str:
-    """脱敏：URL 去 query（token 常在 query），敏感字段值打码。"""
+    """Maskeleme: URL'den query atılır (token genellikle query'dedir), hassas alan değerleri gizlenir."""
     message = _WEBVPN_TOKEN_RE.sub(r"\1<redacted>", message)
     message = _URL_QUERY_RE.sub(r"\1?<redacted>", message)
     message = _AUTH_FIELD_RE.sub(r"\1<redacted>", message)
@@ -45,7 +45,7 @@ def sanitize(message: str) -> str:
 
 
 def sanitize_payload(value):
-    """Recursively sanitize strings in CLI/MCP payloads without changing their shape."""
+    """CLI/MCP yüklerindeki dizeleri yapılarını değiştirmeden özyinelemeli olarak maskeler."""
     if isinstance(value, str):
         return sanitize(value)
     if isinstance(value, dict):

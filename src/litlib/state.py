@@ -1,4 +1,4 @@
-"""SQLite 状态层：任务队列、work 表、去重键、审计日志。"""
+"""SQLite durum katmanı: görev kuyruğu, works tablosu, tekilleştirme anahtarları, denetim günlüğü."""
 
 from __future__ import annotations
 
@@ -101,7 +101,7 @@ def _now() -> str:
 
 
 class DedupeConflictError(ValueError):
-    """Raised when newly resolved metadata points at an existing work."""
+    """Yeni çözümlenen metadata mevcut bir work'ü gösterdiğinde fırlatılır."""
 
 
 class State:
@@ -110,7 +110,7 @@ class State:
         self.readonly = readonly
         if readonly:
             if not self.db_path.exists():
-                raise FileNotFoundError(f"状态库不存在: {self.db_path}")
+                raise FileNotFoundError(f"durum veritabanı yok: {self.db_path}")
             uri = f"{self.db_path.resolve().as_uri()}?mode=ro"
             self._conn = sqlite3.connect(uri, uri=True)
         else:
@@ -136,7 +136,7 @@ class State:
         )
 
     def queue_add(self, lines: list[str], source: str = "csv") -> tuple[int, int]:
-        """返回 (新增任务数, 因重复跳过数)。"""
+        """(eklenen görev sayısı, yinelendiği için atlanan sayı) döndürür."""
         added = 0
         skipped = 0
         for line in lines:
@@ -188,12 +188,12 @@ class State:
     def set_state(self, task_id: int, new_state: TaskState, error: str | None = None) -> bool:
         row = self._conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         if row is None:
-            raise ValueError(f"task {task_id} 不存在")
+            raise ValueError(f"task {task_id} yok")
         old = TaskState(row["state"])
         error = sanitize(error) if error else None
         now = _now()
         if old is new_state:
-            # 同状态：仅更新错误信息（幂等），便于失败重试时刷新 last_error
+            # Aynı durum: yalnız hata bilgisi güncellenir (idempotent); yeniden denemede last_error tazelenir
             self._conn.execute(
                 "UPDATE tasks SET last_error=?, updated_at=? WHERE id=?",
                 (error, now, task_id),
@@ -201,7 +201,7 @@ class State:
             self._conn.commit()
             return True
         if not transition_allowed(old, new_state):
-            raise ValueError(f"非法状态迁移: {old.value} -> {new_state.value}")
+            raise ValueError(f"geçersiz durum geçişi: {old.value} -> {new_state.value}")
         self._conn.execute(
             "UPDATE tasks SET state=?, last_error=?, updated_at=? WHERE id=?",
             (new_state.value, error, now, task_id),
@@ -232,7 +232,7 @@ class State:
             ).fetchone()
             if existing and existing["work_id"] != work.work_id:
                 raise DedupeConflictError(
-                    f"去重冲突: {key_type}={key_value} 已属于 work {existing['work_id']}"
+                    f"tekilleştirme çakışması: {key_type}={key_value} zaten şu work'e ait: {existing['work_id']}"
                 )
         work.updated_at = _now()
         self._conn.execute(
@@ -261,7 +261,7 @@ class State:
             ).fetchone()
             if existing and existing["work_id"] != work_id:
                 raise DedupeConflictError(
-                    f"PDF SHA-256 已属于 work {existing['work_id']}，拒绝登记到 {work_id}"
+                    f"PDF SHA-256 zaten work {existing['work_id']} kaydına ait, {work_id} için kayıt reddedildi"
                 )
         self._conn.execute(
             "INSERT INTO files (work_id, path, sha256, size_bytes, channel, verified_at) VALUES (?, ?, ?, ?, ?, ?) "
@@ -292,11 +292,11 @@ class State:
         return [dict(r) for r in rows]
 
     def mark_reviewed(self, task_id: int) -> bool:
-        """提案审阅完成：PROPOSAL_GENERATED → USER_REVIEWED。"""
+        """Öneri incelemesi tamamlandı: PROPOSAL_GENERATED → USER_REVIEWED."""
         return self.set_state(task_id, TaskState.USER_REVIEWED)
 
     def mark_proposal_generated(self, task_ids: list[int]) -> None:
-        """Atomically mark validated READY tasks after both proposal files are durable."""
+        """İki öneri dosyası da kalıcı olarak yazıldıktan sonra doğrulanmış READY görevleri atomik olarak işaretler."""
         now = _now()
         with self._conn:
             for task_id in task_ids:
@@ -304,12 +304,12 @@ class State:
                     "SELECT work_id, state FROM tasks WHERE id=?", (task_id,)
                 ).fetchone()
                 if row is None:
-                    raise ValueError(f"task {task_id} 不存在")
+                    raise ValueError(f"task {task_id} yok")
                 state = TaskState(row["state"])
                 if state is TaskState.PROPOSAL_GENERATED:
                     continue
                 if state is not TaskState.READY:
-                    raise ValueError(f"task {task_id} 不是 READY: {state.value}")
+                    raise ValueError(f"task {task_id} READY değil: {state.value}")
                 self._conn.execute(
                     "UPDATE tasks SET state=?, last_error=NULL, updated_at=? WHERE id=?",
                     (TaskState.PROPOSAL_GENERATED.value, now, task_id),
@@ -320,9 +320,9 @@ class State:
                 )
 
     def mark_imported(self, work_id: str, zotero_key: str | None, batch: str) -> None:
-        """记录 Zotero 导入映射并标记任务 IMPORTED。"""
+        """Zotero içe aktarma eşlemesini kaydeder ve görevi IMPORTED olarak işaretler."""
         if not zotero_key:
-            raise ValueError("缺少已验证的 Zotero item key，不能标记 IMPORTED")
+            raise ValueError("doğrulanmış Zotero item key yok, IMPORTED işaretlenemez")
         row = self._conn.execute(
             "SELECT id FROM tasks WHERE work_id=? ORDER BY id LIMIT 1", (work_id,)
         ).fetchone()
@@ -331,7 +331,7 @@ class State:
             state = TaskState(task["state"])
             if state is not TaskState.IMPORTED:
                 if state is not TaskState.USER_REVIEWED:
-                    raise ValueError(f"只有 USER_REVIEWED 可确认导入，当前为 {state.value}")
+                    raise ValueError(f"içe aktarma yalnız USER_REVIEWED durumunda onaylanabilir, geçerli durum: {state.value}")
         now = _now()
         with self._conn:
             self._conn.execute(
@@ -394,7 +394,7 @@ class State:
 
     def recover_incomplete(self, include_failed: bool = False,
                            include_paused: bool = False) -> tuple[int, int]:
-        """将崩溃遗留的中间状态重新排队；返回 (已恢复, 达重试上限跳过)。"""
+        """Çökmeden kalan ara durumları yeniden kuyruğa alır; (kurtarılan, deneme sınırına ulaştığı için atlanan) döndürür."""
         states = [
             TaskState.METADATA_FETCH.value,
             TaskState.OA_OK.value,
@@ -427,10 +427,10 @@ class State:
         return recovered, skipped
 
     def begin_attempt(self, task_id: int) -> bool:
-        """递增任务尝试次数；达到上限返回 False。"""
+        """Görevin deneme sayısını artırır; sınıra ulaşıldıysa False döndürür."""
         row = self._conn.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         if row is None:
-            raise ValueError(f"task {task_id} 不存在")
+            raise ValueError(f"task {task_id} yok")
         if row["attempt_count"] >= row["max_attempts"]:
             return False
         self._conn.execute(

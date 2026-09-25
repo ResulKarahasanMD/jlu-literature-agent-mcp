@@ -1,4 +1,4 @@
-"""测试：只读 MCP 工具的错误处理与 state 兜底路径（不依赖 Zotero 在线）。"""
+"""Testler: salt-okur MCP araçlarının hata yönetimi ve state yedek yolu (çalışan Zotero gerektirmez)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""导入提案：RIS 文件 + 清单 CSV（Phase 4）。"""
+"""İçe aktarma önerisi: RIS dosyası + liste CSV'si (Phase 4)."""
 
 from __future__ import annotations
 
@@ -66,15 +66,15 @@ def build_proposal(st: State, out_dir: Path = paths.output,
     else:
         tasks = [t for t in tasks if t["state"] == TaskState.READY.value]
     if not tasks:
-        raise ValueError("没有可生成 proposal 的 READY 任务")
+        raise ValueError("proposal üretilebilecek READY görev yok")
     records = []
     for task in tasks:
         work = st.get_work(task["work_id"])
         if not work or not work.title:
-            raise ValueError(f"任务 {task['id']} 缺少完整元数据，不能生成 proposal")
+            raise ValueError(f"görev {task['id']} için eksiksiz metadata yok, proposal üretilemez")
         files = st.get_files(work.work_id)
         if not files or not Path(files[0]["path"]).exists():
-            raise ValueError(f"任务 {task['id']} 缺少可用 PDF，不能生成 proposal")
+            raise ValueError(f"görev {task['id']} için kullanılabilir PDF yok, proposal üretilemez")
         records.append((task, work, files[0]["path"]))
 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")

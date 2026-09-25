@@ -1,52 +1,53 @@
 ---
 name: litlib-literature-workflow
-description: Use when a user asks to find/acquire papers or says 文献检索、下载文献、批量获取论文、吉大机构访问、CARSI/WebVPN、知网/CNKI、PDF 校验、导入 Zotero、检索本地文献库, LitLib, or ZotSeek. Orchestrates academic search tools, the litlib CLI, the read-only LitLib MCP, and the read-only ZotSeek MCP without bypassing CAPTCHA or paywalls.
+description: Kullanıcı makale bulmak/edinmek istediğinde ya da literatür arama, makale indirme, toplu makale edinme, kurum erişimi (JLU/BVU), CARSI/WebVPN/GlobalProtect, CNKI, PDF doğrulama, Zotero'ya aktarma, yerel literatür kütüphanesinde arama, LitLib veya ZotSeek dediğinde kullanın. Akademik arama araçlarını, litlib CLI'ı, salt-okur LitLib MCP'yi ve salt-okur ZotSeek MCP'yi CAPTCHA ya da ödeme duvarlarını aşmadan yönetir.
 license: MIT
-compatibility: Windows 10/11; Python 3.11-3.13; uv; Zotero 8/9; Jilin University routes are institution-specific.
+compatibility: Windows 10/11; Python 3.11-3.13; uv; Zotero 8/9; Jilin Üniversitesi rotaları kuruma özgüdür.
 metadata:
   author: LitLib contributors
   version: "0.3.0"
 ---
 
-# LitLib Literature Workflow
+# LitLib literatür iş akışı
 
-## Purpose
+## Amaç
 
-Use this skill as the execution policy for a three-part system:
+Bu skill'i üç parçalı bir sistemin yürütme politikası olarak kullanın:
 
-1. **This skill** decides which capability to use, applies compliance and human checkpoints,
-   interprets failures, and records what was verified.
-2. **LitLib MCP** performs deterministic, local, read-only lookup of metadata, task state,
-   PDF paths, Zotero collections, and paged PDF text.
-3. **ZotSeek MCP** performs local semantic or hybrid retrieval over a separately maintained
-   Zotero index.
+1. **Bu skill** hangi yeteneğin kullanılacağına karar verir, uyum kurallarını ve insan
+   checkpoint'lerini uygular, hataları yorumlar ve neyin doğrulandığını kaydeder.
+2. **LitLib MCP** metadata, görev durumu, PDF yolları, Zotero koleksiyonları ve sayfalı PDF
+   metni için belirlenimci, yerel, salt-okur sorgu yapar.
+3. **ZotSeek MCP** ayrıca tutulan bir Zotero indeksi üzerinde yerel semantik ya da hibrit
+   arama yapar.
 
-All mutations use the `litlib` CLI or an explicit human Zotero action. MCP tools do not
-download papers, change task state, import items, or modify the Zotero library.
+Tüm değişiklikler `litlib` CLI ile ya da insanın açık bir Zotero işlemiyle yapılır. MCP
+araçları makale indirmez, görev durumunu değiştirmez, öğe içe aktarmaz ya da Zotero
+kütüphanesini değiştirmez.
 
-## Do Not Overclaim
+## Abartılı iddiada bulunmayın
 
-LitLib is an acquisition and local-library workflow, not a complete bibliographic search
-database. For a topic search, first use the Agent's installed academic database capability
-(for example PubMed, Crossref, OpenAlex, Semantic Scholar, or another approved scholarly
-source), retain DOI/PMID and source provenance, then pass identifiers to LitLib. Do not
-substitute generic web search when an academic database tool is available.
+LitLib bir edinme ve yerel kütüphane iş akışıdır, eksiksiz bir bibliyografik arama
+veritabanı değildir. Konu araması için önce Agent'a kurulu akademik veritabanı yeteneğini
+kullanın (örneğin PubMed, Crossref, OpenAlex, Semantic Scholar ya da onaylı başka bir akademik
+kaynak), DOI/PMID ve kaynak bilgisini koruyun, sonra tanımlayıcıları LitLib'e verin. Akademik
+veritabanı aracı varken genel web aramasını onun yerine kullanmayın.
 
-ZotSeek is an external Zotero plugin, not code shipped by LitLib. Its MCP can only search
-items already covered by the active embedding model. Semantic similarity is retrieval
-evidence, not evidence that a paper supports a scientific claim.
+ZotSeek harici bir Zotero eklentisidir, LitLib'le birlikte gelen kod değildir. MCP'si yalnız
+etkin embedding modelinin kapsadığı öğelerde arama yapabilir. Semantik benzerlik bir arama
+kanıtıdır; bir makalenin bilimsel bir iddiayı desteklediğinin kanıtı değildir.
 
-## Locate and Inspect the Installation
+## Kurulumu bulun ve inceleyin
 
-Never assume `D:\op\projects\literature-library` on another machine. Resolve the project in
-this order:
+Başka bir makinede `D:\op\projects\literature-library` yolunu asla varsaymayın. Projeyi şu
+sırayla çözün:
 
-1. User-provided project path.
-2. `LITLIB_ROOT`, if set.
-3. The repository containing `pyproject.toml` with project name `litlib`.
-4. An installed `litlib` executable on `PATH`.
+1. Kullanıcının verdiği proje yolu.
+2. Ayarlıysa `LITLIB_ROOT`.
+3. Proje adı `litlib` olan `pyproject.toml`'u içeren depo.
+4. `PATH` üzerinde kurulu bir `litlib` çalıştırılabiliri.
 
-Before a write workflow, run:
+Yazan bir iş akışından önce şunları çalıştırın:
 
 ```powershell
 litlib --version
@@ -54,49 +55,61 @@ litlib doctor
 litlib status
 ```
 
-Examples use `litlib` for readability. In an unactivated source clone, run the equivalent
-`uv run litlib ...`; on Windows, MCP clients should use the absolute `.venv\Scripts\python.exe`
-with arguments `-m litlib.cli mcp` so the console-script wrapper is not locked during upgrades.
+Örneklerde okunabilirlik için `litlib` kullanılır. Etkinleştirilmemiş bir kaynak klonunda
+karşılığı olan `uv run litlib ...` komutunu çalıştırın; Windows'ta MCP istemcileri, güncelleme
+sırasında console-script sarmalayıcısı kilitlenmesin diye mutlak `.venv\Scripts\python.exe`
+yolunu `-m litlib.cli mcp` argümanlarıyla kullanmalıdır.
 
-If the executable is absent, read [references/CLIENT_SETUP.md](references/CLIENT_SETUP.md).
-Do not install packages, plugins, change Zotero settings, store credentials, or alter an
-Agent's MCP configuration without telling the user what will change.
+Çalıştırılabilir dosya yoksa [references/CLIENT_SETUP.md](references/CLIENT_SETUP.md)
+belgesini okuyun. Neyin değişeceğini kullanıcıya söylemeden paket ya da eklenti kurmayın,
+Zotero ayarlarını değiştirmeyin, kimlik bilgisi saklamayın ya da Agent'ın MCP yapılandırmasını
+değiştirmeyin.
 
-## Classify the Request
+## İsteği sınıflandırın
 
-### Search the existing library
+### Mevcut kütüphanede arama
 
-1. Call `zotseek_index_status` first when ZotSeek is available.
-2. For concepts, use `zotseek_search` in `hybrid` mode. Use English queries for an
-   English-only library when Chinese-to-English retrieval is weak.
-3. Use `library_search_metadata` for exact title, DOI, author, or task lookup.
-4. Use `library_get_pdf_path` or `library_get_fulltext` with an exact DOI or item key.
-   Broad queries can be ambiguous and must not silently select the first paper.
-5. Read only the needed pages or character window. Do not inject a whole paper into the
-   Agent context unless the user explicitly requires full-document processing.
+1. ZotSeek varsa önce `zotseek_index_status` çağırın.
+2. Kavramlar için `zotseek_search`'ü `hybrid` modunda kullanın. Yalnız İngilizce içerikli bir
+   kütüphanede başka dilden İngilizceye arama zayıfsa İngilizce sorgu kullanın.
+3. Tam başlık, DOI, yazar ya da görev sorgusu için `library_search_metadata` kullanın.
+4. `library_get_pdf_path` ya da `library_get_fulltext`'i tam bir DOI ya da item key ile
+   kullanın. Geniş sorgular belirsiz olabilir ve sessizce ilk makaleyi seçmemelidir.
+5. Yalnız gereken sayfaları ya da karakter penceresini okuyun. Kullanıcı açıkça tüm belgenin
+   işlenmesini istemedikçe bir makalenin tamamını Agent bağlamına koymayın.
 
-### Find new papers on a topic
+### Bir konuda yeni makaleler bulma
 
-1. Search an academic database using the Agent's scholarly search capability.
-2. Return and preserve DOI or PMID, source database, retrieval date, and uncertainty.
-3. Deduplicate the identifiers before acquisition.
-4. Continue with the acquisition workflow below.
+1. Agent'ın akademik arama yeteneğiyle bir akademik veritabanında arayın.
+2. DOI ya da PMID'yi, kaynak veritabanını, sorgu tarihini ve belirsizliği döndürün ve saklayın.
+3. Edinmeden önce tanımlayıcıları tekilleştirin.
+4. Aşağıdaki edinme iş akışıyla devam edin.
 
-### Acquire one DOI
+### Tek bir DOI edinme
 
-Use the single entry point. It creates a task when needed, resolves metadata, downloads,
-validates, and registers the file:
+Açık erişim için önce aşağıdaki toplu edinme akışını tek DOI ile çalıştırın
+(`litlib queue add <DOI>` → `run --stage fetch-metadata` → `run --stage oa`).
+
+`litlib download` gerekirse görev oluşturur ve metadata'yı çözümler; ardından PDF'i
+**yalnızca özel Chrome üzerinden** (doi.org → makale sayfası → PDF bağlantısı) indirir,
+doğrular ve kaydeder. OA kanallarını denemez; önce `litlib inst open` çalıştırılmamışsa
+`CDP portu 9222 yanıt vermiyor` hatasıyla başarısız olur:
 
 ```powershell
+litlib inst open
 litlib download 10.xxxx/example
 litlib verify
+litlib inst close
 ```
 
-The command refuses to overwrite an existing target unless `--overwrite` is explicit.
-Registration failure is a failure even when a PDF file exists; preserve the file and inspect
-the task database instead of claiming success.
+İndirme başarısız olursa görev `DEDUPED` durumunda kalır ve bir sonraki
+`run --stage oa` onu işler.
 
-### Acquire a batch
+Komut, `--overwrite` açıkça verilmedikçe mevcut bir hedefin üzerine yazmayı reddeder. PDF
+dosyası olsa bile kayıt başarısızlığı bir başarısızlıktır; başarı iddia etmek yerine dosyayı
+koruyun ve görev veritabanını inceleyin.
+
+### Toplu edinme
 
 ```powershell
 litlib queue add --file examples/input.example.csv
@@ -105,8 +118,8 @@ litlib run --stage oa
 litlib status --verbose
 ```
 
-Only tasks in `REQUIRES_INST` proceed to institutional access. Keep institutional batches at
-10 papers or fewer, concurrency 1, with 8-15 second delays:
+Kurum erişimine yalnız `REQUIRES_INST` durumundaki görevler geçer. Kurum partilerini en fazla
+10 makale, eşzamanlılık 1 ve 8-15 saniye beklemeyle tutun:
 
 ```powershell
 litlib inst check-cred
@@ -115,180 +128,191 @@ litlib run --stage inst --access-mode campus
 litlib inst close
 ```
 
-Use `offcampus` only when the user is off campus and has authorized JLU credentials.
-Use `auto` when network status is unknown. Read
-[references/DECISION_TREE.md](references/DECISION_TREE.md) before diagnosing a failure and
-[references/SITE_RECIPES.md](references/SITE_RECIPES.md) before changing a publisher route.
+`offcampus`'u yalnız kullanıcı kampüs dışındaysa ve yetkili JLU kimlik bilgileri varsa
+kullanın. Ağ durumu bilinmiyorsa `auto` kullanın. Bir hatayı teşhis etmeden önce
+[references/DECISION_TREE.md](references/DECISION_TREE.md), bir yayıncı rotasını
+değiştirmeden önce [references/SITE_RECIPES.md](references/SITE_RECIPES.md) belgesini okuyun.
 
-### Acquire CNKI content
+### CNKI içeriği edinme
 
-CNKI is a separate browser flow. Search can work before the download challenge is passed;
-do not treat search success as download authorization.
+CNKI ayrı bir tarayıcı akışıdır. Arama, indirme doğrulaması geçilmeden de çalışabilir;
+aramanın başarılı olmasını indirme yetkisi saymayın.
 
 ```powershell
 litlib inst open
 litlib cnki open
-litlib cnki search "检索词" --limit 10
-litlib cnki download "<detail-page-url>" --output "<storage-path>"
+litlib cnki search "<arama terimi>" --limit 10
+litlib cnki download "<ayrıntı-sayfası-url>" --output "<kayıt-yolu>"
 litlib inst close
 ```
 
-If `bar.cnki.net` presents a slider, return `HUMAN_REQUIRED` and ask the user to complete it
-in the visible dedicated browser. Never automate or outsource the slider. CAJ is not PDF;
-preserve the correct extension and do not pass CAJ through PDF validation.
+`bar.cnki.net` bir kaydırıcı gösterirse `HUMAN_REQUIRED` döndürün ve kullanıcıdan bunu görünür
+özel tarayıcıda tamamlamasını isteyin. Kaydırıcıyı asla otomatikleştirmeyin ya da başkasına
+yaptırmayın. CAJ, PDF değildir; doğru uzantıyı koruyun ve CAJ'ı PDF doğrulamasından
+geçirmeyin.
 
-## PDF Success Contract
+## PDF başarı sözleşmesi
 
-A download is successful only when all applicable checks pass:
+Bir indirme ancak ilgili tüm kontrollerden geçerse başarılıdır:
 
-1. The file begins with `%PDF-`.
-2. `%%EOF` exists near the file tail; a `206 Partial Content` fragment is not enough.
-3. `pypdf` parses at least one page.
-4. The expected DOI appears in the first three extracted pages, including DOI text split by
-   line breaks; a different DOI on page 1 is a hard mismatch.
-5. The first three pages do not identify the file as supplementary/supporting material.
-6. SHA-256 matches the task record on later verification.
-7. The task database registration succeeded.
+1. Dosya `%PDF-` ile başlar.
+2. Dosyanın sonuna yakın `%%EOF` bulunur; `206 Partial Content` parçası yetmez.
+3. `pypdf` en az bir sayfayı ayrıştırır.
+4. Beklenen DOI, satır sonlarıyla bölünmüş DOI metni dahil, çıkarılan ilk üç sayfada geçer;
+   1. sayfada farklı bir DOI kesin uyumsuzluktur.
+5. İlk üç sayfa dosyayı ek/destekleyici materyal olarak tanımlamaz.
+6. Sonraki doğrulamada SHA-256 görev kaydıyla eşleşir.
+7. Görev veritabanına kayıt başarılı olmuştur.
 
-Run `litlib verify` before delivery. A zero-item verification is not success.
+Teslimden önce `litlib verify` çalıştırın. Sıfır öğeli bir doğrulama başarı değildir.
 
-## Zotero Import Contract
+## Zotero içe aktarma sözleşmesi
 
-The supported write path is deliberately human-gated:
+Desteklenen yazma yolu bilerek insan onayına bağlanmıştır:
 
 ```powershell
 litlib proposal --doi-file <batch.csv>
-# User imports the generated RIS in Zotero and checks the collection/items.
+# Kullanıcı üretilen RIS'i Zotero'ya aktarır ve koleksiyonu/öğeleri kontrol eder.
 litlib review --doi-file <batch.csv>
 litlib import --lookup --batch <name> --doi-file <batch.csv>
 ```
 
-`IMPORTED` means LitLib found exactly one Zotero parent item by exact DOI (or normalized exact
-title fallback), obtained a non-empty Zotero item key, and resolved an existing PDF
-attachment. If Zotero is stopped, no exact item exists, multiple matches exist, or the PDF
-attachment is missing, do not mark the task imported.
+`IMPORTED`, LitLib'in tam DOI ile (ya da yedek olarak normalleştirilmiş tam başlıkla) tam
+olarak bir Zotero parent item'ı bulduğu, boş olmayan bir Zotero item key aldığı ve var olan
+bir PDF ekini çözümlediği anlamına gelir. Zotero kapalıysa, tam eşleşen öğe yoksa, birden
+fazla eşleşme varsa ya da PDF eki eksikse görevi içe aktarılmış olarak işaretlemeyin.
 
-Never edit `zotero.sqlite` directly. Do not install a Zotero bridge that evaluates arbitrary
-code. Zotero library writes beyond the RIS import need separate user approval and security
-review.
+`zotero.sqlite`'ı asla doğrudan düzenlemeyin. Keyfi kod çalıştıran bir Zotero köprüsü
+kurmayın. RIS içe aktarma dışındaki Zotero kütüphanesi yazımları ayrı kullanıcı onayı ve
+güvenlik incelemesi gerektirir.
 
-## Human Checkpoints and Stop Conditions
+## İnsan checkpoint'leri ve durma koşulları
 
-Pause and ask the user when any of these occurs:
+Şunlardan biri olursa durun ve kullanıcıya sorun:
 
-- CAPTCHA, Turnstile, slider, OTP, or a visible human-verification page.
-- First-time credential storage, plugin installation, Zotero configuration, or MCP config edit.
-- Terms of use or attribute-release page whose acceptance has legal/account implications.
-- An existing output would be overwritten.
-- The only available object is CAJ or HTML and the requested deliverable is PDF.
+- CAPTCHA, Turnstile, kaydırıcı, OTP ya da görünür bir insan doğrulama sayfası.
+- İlk kez kimlik bilgisi saklama, eklenti kurulumu, Zotero yapılandırması ya da MCP
+  yapılandırma değişikliği.
+- Kabulü hukuki/hesap sonuçları olan kullanım koşulları ya da öznitelik paylaşımı sayfası.
+- Mevcut bir çıktının üzerine yazılacak olması.
+- Mevcut tek nesnenin CAJ ya da HTML olması ve istenen teslimatın PDF olması.
 
-Stop automated attempts and report the reason when:
+Şu durumlarda otomatik denemeleri durdurun ve nedenini raporlayın:
 
-- The page explicitly offers purchase, rental, `Buy Protocol`, or otherwise shows no
-  authorized PDF entitlement.
-- The institution's identity provider rejects the service provider as unsupported.
-- Repeated `429` or publisher rate limiting occurs. Cool down; do not rotate identities,
-  profiles, or proxies to evade it.
-- A route would require bypassing a paywall, CAPTCHA, technical access control, or license.
+- Sayfa açıkça satın alma, kiralama, `Buy Protocol` sunuyor ya da başka biçimde yetkili PDF
+  hakkı olmadığını gösteriyor.
+- Kurumun kimlik sağlayıcısı servis sağlayıcıyı desteklenmiyor diye reddediyor.
+- Tekrarlanan `429` ya da yayıncı hız sınırı oluşuyor. Soğumasını bekleyin; atlatmak için
+  kimlik, profil ya da proxy değiştirmeyin.
+- Bir rota ödeme duvarı, CAPTCHA, teknik erişim denetimi ya da lisansı aşmayı gerektiriyor.
 
-## Failure Handling
+## Hata yönetimi
 
-Use `litlib status --attempts <task-id>` and classify the failure before retrying:
+`litlib status --attempts <task-id>` kullanın ve yeniden denemeden önce hatayı
+sınıflandırın:
 
-- `HUMAN_REQUIRED`: visible challenge; wait for the user, then
+- `HUMAN_REQUIRED`: görünür doğrulama; kullanıcıyı bekleyin, sonra
   `litlib queue recover --paused`.
-- `RATE_LIMITED`: stop and cool down; recover only after a reasonable interval.
-- `PAYWALLED`: explicit purchase/rental/no-entitlement stop; terminal unless a human changes
-  the access situation outside LitLib and creates a new task.
-- `REQUIRES_INST`: OA candidates failed but an authorized institution route may remain.
-- `FAILED`: inspect metadata, dedupe conflict, file identity, or internal exception.
-- HTML from a PDF-looking URL: diagnose authentication, anti-bot response, landing-page
-  indirection, or HTML-only entitlement. Do not rename HTML to `.pdf`.
+- `RATE_LIMITED`: durun ve soğumayı bekleyin; ancak makul bir süreden sonra kurtarın.
+- `PAYWALLED`: açık satın alma/kiralama/yetki yok nedeniyle durma; bir insan erişim durumunu
+  LitLib dışında değiştirip yeni bir görev oluşturmadıkça kesin son durumdur.
+- `REQUIRES_INST`: OA adayları başarısız oldu ama yetkili bir kurum rotası kalmış olabilir.
+- `FAILED`: metadata'yı, tekilleştirme çakışmasını, dosya kimliğini ya da iç istisnayı
+  inceleyin.
+- PDF gibi görünen bir URL'den HTML gelmesi: kimlik doğrulama, anti-bot yanıtı, açılış sayfası
+  yönlendirmesi ya da yalnız HTML yetkisini teşhis edin. HTML'i `.pdf` olarak yeniden
+  adlandırmayın.
 
-CLI exit status is authoritative: `0` success, `1` runtime/verification/no-result failure,
-`2` usage or unmet precondition, and `3` a CNKI human checkpoint. Never report completion
-from console text alone when the exit status is non-zero.
+CLI çıkış kodu belirleyicidir: `0` başarı, `1` çalışma zamanı/doğrulama/sonuç yok hatası,
+`2` kullanım hatası ya da karşılanmamış ön koşul, `3` CNKI insan checkpoint'i. Çıkış kodu
+sıfır değilken yalnız konsol metnine bakarak tamamlandı demeyin.
 
-## Reporting
+## Raporlama
 
-For every batch report:
+Her parti için şunları raporlayın:
 
-- Requested, resolved, downloaded, verified, imported, human-required, rate-limited, and
-  paywalled counts.
-- DOI/PMID and source for each paper.
-- Route used for each successful PDF.
-- Explicit distinction between `verified`, `inferred`, and `unverified` behavior.
-- Any live-browser step the user still needs to complete.
+- İstenen, çözümlenen, indirilen, doğrulanan, içe aktarılan, insan gerektiren, hız sınırına
+  takılan ve ödeme duvarına takılan sayıları.
+- Her makalenin DOI/PMID'si ve kaynağı.
+- Her başarılı PDF için kullanılan rota.
+- `verified`, `inferred` ve `unverified` davranış arasında açık ayrım.
+- Kullanıcının hâlâ tamamlaması gereken canlı tarayıcı adımları.
 
-Do not expose credentials, cookies, WebVPN host tokens, API keys, signed PDF URLs, or full
-query strings. Do not commit PDFs, extracted full text, Zotero databases, browser profiles,
-logs, XPI files, or runtime state.
+Kimlik bilgilerini, çerezleri, WebVPN host token'larını, API anahtarlarını, imzalı PDF
+URL'lerini ya da tam query dizelerini açığa çıkarmayın. PDF'leri, çıkarılmış tam metni,
+Zotero veritabanlarını, tarayıcı profillerini, günlükleri, XPI dosyalarını ya da çalışma
+zamanı durumunu commit etmeyin.
 
-## Personal Experience (Self-Evolving)
+## Kişisel deneyim (kendini geliştiren)
 
-The repository recipes are a read-only baseline shipped with the code. Every user also has a
-local, private experience library (`litlib learn`) that grows automatically:
+Depodaki tarifler kodla birlikte gelen salt-okur temel çizgidir. Her kullanıcının ayrıca
+otomatik büyüyen yerel, özel bir deneyim kütüphanesi (`litlib learn`) vardır:
 
-- **Location**: `<LITLIB_RUNTIME_ROOT>\experience\experiences.json` (default
-  `D:\LitLibRuntime\experience\experiences.json`). It is never committed to Git.
-- **Automatic learning**: after a verified successful institutional or CNKI download through a
-  route that worked, LitLib records `domain + route + url_pattern + doi_prefix` locally.
-  PAYWALLED / HUMAN_REQUIRED / RATE_LIMITED / FAILED are never recorded as success.
-- **Manual learning**: an agent or user can add observations with
-  `litlib learn add --domain <domain> --route <route> --note "<what worked>"`.
-- **Read before trying a new site**: run `litlib learn list --domain <site>` or
-  `litlib learn export` first. Personal experience takes precedence over the canonical
-  `SITE_RECIPES.md` when they conflict.
-- **All recorded content is sanitized** (URLs lose query tokens, WebVPN tokens, cookies and
-  credentials are redacted). Personal experience is per-user and per-machine; it is not shared
-  by the repository.
-- Manage with `litlib learn list | add | remove | export`. Cleaning a wrong entry:
+- **Konum**: `<LITLIB_RUNTIME_ROOT>\experience\experiences.json` (varsayılan
+  `D:\LitLibRuntime\experience\experiences.json`). Git'e asla commit edilmez.
+- **Otomatik öğrenme**: işe yarayan bir rotayla doğrulanmış başarılı bir kurum ya da CNKI
+  indirmesinden sonra LitLib yerelde `domain + route + url_pattern + doi_prefix` kaydeder.
+  PAYWALLED / HUMAN_REQUIRED / RATE_LIMITED / FAILED asla başarı olarak kaydedilmez.
+- **Elle öğrenme**: bir Agent ya da kullanıcı
+  `litlib learn add --domain <alan-adı> --route <rota> --note "<ne işe yaradı>"` ile gözlem
+  ekleyebilir.
+- **Yeni bir siteyi denemeden önce okuyun**: önce `litlib learn list --domain <site>` ya da
+  `litlib learn export` çalıştırın. Çeliştiklerinde kişisel deneyim kanonik
+  `SITE_RECIPES.md`'den önce gelir.
+- **Kaydedilen tüm içerik maskelenir** (URL'lerden query token'ları atılır; WebVPN token'ları,
+  çerezler ve kimlik bilgileri gizlenir). Kişisel deneyim kullanıcıya ve makineye özeldir;
+  depo üzerinden paylaşılmaz.
+- `litlib learn list | add | remove | export` ile yönetin. Hatalı kaydı temizlemek için:
   `litlib learn remove <id>`.
 
-Personal experience is a retrieval aid only. It never authorizes bypassing a paywall,
-CAPTCHA, rate limit, or unsupported CARSI service provider.
+Kişisel deneyim yalnız bir arama yardımıdır. Ödeme duvarını, CAPTCHA'yı, hız sınırını ya da
+desteklenmeyen CARSI servis sağlayıcısını aşmaya asla yetki vermez.
 
-## UniProt and Enzyme-Data Workflow
+## UniProt ve enzim verisi iş akışı
 
-When the user provides UniProt accessions and requests enzyme/cellulase measurements, keep
-acquisition separate from extraction:
+Kullanıcı UniProt accession'ları verip enzim/selülaz ölçümleri istediğinde edinmeyi veri
+çıkarımından ayrı tutun:
 
-1. Run `litlib uniprot <accession> --output <json>` to preserve the canonical sequence,
-   organism, enzyme metadata, and linked DOI/PMID/PMCID references. `--queue` may add those
-   identifiers to the LitLib task queue after the accession output has been inspected.
-2. Acquire and verify the primary papers with the normal OA/institutional workflow. Do not
-   infer that a UniProt citation contains an activity measurement until the paper is read.
-3. Run `litlib evidence scan <verified.pdf>`. This is triage only: it reports target-field
-   pages, figure/table references, supplement references, and missing text evidence. It does
-   not prove that an image lacks a value.
-4. If the article points to supplementary information or source data, run
-   `litlib supplement discover <article-url>` and download only the required artifact. Files
-   are stored separately under `staging/supplements` and recorded in a sanitized manifest.
-5. Store enzyme measurements as JSONL using the cellulase schema. A record may have missing
-   fields, but must preserve raw units, normalized substrate, assay conditions, DOI and page/
-   table/figure/supplement evidence locations.
-6. Run `litlib cellulase validate <measurements.jsonl>` before using the data and
-   `litlib cellulase maxima <measurements.jsonl> --output <maxima.jsonl>` to select maxima.
+1. Kanonik diziyi, organizmayı, enzim metadata'sını ve bağlantılı DOI/PMID/PMCID
+   referanslarını saklamak için `litlib uniprot <accession> --output <json>` çalıştırın.
+   `--queue`, accession çıktısı incelendikten sonra bu tanımlayıcıları LitLib görev kuyruğuna
+   ekleyebilir.
+2. Ana makaleleri olağan OA/kurum iş akışıyla edinip doğrulayın. Makale okunmadan bir UniProt
+   atfının aktivite ölçümü içerdiğini varsaymayın.
+3. `litlib evidence scan <doğrulanmış.pdf>` çalıştırın. Bu yalnız ön değerlendirmedir: hedef
+   alan sayfalarını, şekil/tablo referanslarını, ek materyal referanslarını ve eksik metin
+   kanıtını raporlar. Bir görselde değer olmadığını kanıtlamaz.
+4. Makale ek bilgilere ya da kaynak veriye işaret ediyorsa
+   `litlib supplement discover <makale-url>` çalıştırın ve yalnız gereken dosyayı indirin.
+   Dosyalar ayrı olarak `staging/supplements` altında saklanır ve maskelenmiş bir manifeste
+   kaydedilir.
+5. Enzim ölçümlerini selülaz şemasıyla JSONL olarak saklayın. Bir kayıtta eksik alan olabilir
+   ama ham birimler, normalleştirilmiş substrat, deney koşulları, DOI ve sayfa/tablo/şekil/ek
+   materyal kanıt konumları korunmalıdır.
+6. Veriyi kullanmadan önce `litlib cellulase validate <measurements.jsonl>`, maksimumları
+   seçmek için `litlib cellulase maxima <measurements.jsonl> --output <maxima.jsonl>`
+   çalıştırın.
 
-Default maximum rule: compare only within the same construct sequence, normalized substrate,
-metric family, standardized unit, and assay method. The same enzyme may therefore have multiple
-maximum records for different substrates. Do not combine `U/mL`, `U/mg`, relative activity,
-`kcat`, `Km`, and `kcat/Km` into one ranking. Relative activity without a same-assay absolute
-anchor remains a separate candidate record; it is never silently converted.
+Varsayılan maksimum kuralı: yalnız aynı yapı dizisi, normalleştirilmiş substrat, metrik
+ailesi, standartlaştırılmış birim ve assay method içinde karşılaştırın. Bu yüzden aynı enzimin
+farklı substratlar için birden fazla maksimum kaydı olabilir. `U/mL`, `U/mg`, bağıl aktivite,
+`kcat`, `Km` ve `kcat/Km`'yi tek bir sıralamada birleştirmeyin. Aynı deneyde mutlak bir
+dayanağı olmayan bağıl aktivite ayrı bir aday kayıt olarak kalır; asla sessizce dönüştürülmez.
 
-Mutants and truncations are eligible only when the experimental construct is explicit or its
-sequence can be reconstructed from an exact reference sequence plus unambiguous mutations and
-residue boundaries. Otherwise mark the construct unresolved and exclude it from the formal
-training set.
+Mutantlar ve kesik yapılar yalnız deneysel yapı açıkça verilmişse ya da dizisi tam bir
+referans dizisi ile belirsiz olmayan mutasyonlar ve kalıntı sınırlarından yeniden
+kurulabiliyorsa uygundur. Aksi halde yapıyı çözümlenmemiş olarak işaretleyin ve resmi eğitim
+kümesinin dışında tutun.
 
-For image-only values, first use text, table, and source-data routes. Generate a small image
-review queue only for pages flagged by evidence triage. A digitized value must be marked
-`digitized`; when no ground truth exists, report reproducibility/uncertainty rather than claiming
-an exact error percentage. Use an external multimodal model only for the selected crop/panel,
-not for every full paper.
+Yalnız görselde bulunan değerler için önce metin, tablo ve kaynak veri rotalarını kullanın.
+Yalnız kanıt ön değerlendirmesinin işaretlediği sayfalar için küçük bir görsel inceleme
+kuyruğu oluşturun. Sayısallaştırılmış bir değer `digitized` olarak işaretlenmelidir; gerçek
+değer yoksa kesin bir hata yüzdesi iddia etmek yerine tekrarlanabilirlik/belirsizlik
+raporlayın. Harici çok kipli modeli her makalenin tamamı için değil, yalnız seçilen
+kırpım/panel için kullanın.
 
-## References
+## Referanslar
 
-- [Decision tree and generalized diagnostics](references/DECISION_TREE.md)
-- [Verified publisher and database recipes](references/SITE_RECIPES.md)
-- [Installation, Zotero, ZotSeek, and MCP client setup](references/CLIENT_SETUP.md)
+- [Karar ağacı ve genelleştirilmiş teşhis](references/DECISION_TREE.md)
+- [Doğrulanmış yayıncı ve veritabanı tarifleri](references/SITE_RECIPES.md)
+- [Kurulum, Zotero, ZotSeek ve MCP istemci yapılandırması](references/CLIENT_SETUP.md)

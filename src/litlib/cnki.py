@@ -1,4 +1,4 @@
-"""CNKI 校园网检索/下载与校外 CARSI 登录适配。"""
+"""CNKI kampüs ağı arama/indirme ve kampüs dışı CARSI girişi uyarlaması."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ async def _page_state(tab: chrome_cdp.Tab) -> tuple[str, str]:
 
 
 async def _has_visible_cnki_challenge(tab: chrome_cdp.Tab, url: str, text: str) -> bool:
-    """忽略留在 DOM 中但被移出屏幕的腾讯验证码组件。"""
+    """DOM'da kalan ama ekran dışına taşınmış Tencent doğrulama bileşenini yok sayar."""
     if re.search(r"/verify/|[?&]captchaId=", url, re.I):
         return True
     if not is_cnki_challenge(url, text):
@@ -79,7 +79,7 @@ async def _has_visible_cnki_challenge(tab: chrome_cdp.Tab, url: str, text: str) 
 
 
 async def _connect_or_open_cnki(url: str) -> chrome_cdp.Tab:
-    """复用已有 CNKI 标签，避免 CNKI 对每个新标签重复触发滑块。"""
+    """Mevcut CNKI sekmesini yeniden kullanır; CNKI'nin her yeni sekmede kaydırıcı doğrulamayı yeniden tetiklemesini önler."""
     await chrome_cdp.wait_for_cdp(timeout=10)
     async with httpx.AsyncClient(timeout=10) as client:
         pages = (await client.get(
@@ -93,7 +93,7 @@ async def _connect_or_open_cnki(url: str) -> chrome_cdp.Tab:
         if host == "kns.cnki.net" or host.endswith(".cnki.net"):
             is_requested_page = page_url.split("?", 1)[0] == url.split("?", 1)[0]
             is_challenge_page = bool(re.search(r"/verify/|[?&]captchaId=", page_url, re.I))
-            # Prefer the original, verified CNKI page over a challenge redirect.
+            # Doğrulama yönlendirmesi yerine özgün, doğrulanmış CNKI sayfası tercih edilir.
             candidates.append((not is_requested_page, is_challenge_page, page))
     if candidates:
         _, _, page = min(candidates, key=lambda candidate: candidate[:2])
@@ -102,14 +102,14 @@ async def _connect_or_open_cnki(url: str) -> chrome_cdp.Tab:
         return tab
     ws = await chrome_cdp.create_tab_navigate(url, timeout=30)
     if not ws:
-        raise CNKIError("无法创建 CNKI 标签页")
+        raise CNKIError("CNKI sekmesi oluşturulamadı")
     tab = chrome_cdp.Tab(ws)
     await tab.connect()
     return tab
 
 
 async def open_cnki_campus() -> str:
-    """打开 CNKI 校园网入口，保留可见标签页供用户完成安全验证。"""
+    """CNKI kampüs ağı girişini açar; kullanıcının güvenlik doğrulamasını tamamlaması için sekmeyi görünür bırakır."""
     tab = await _connect_or_open_cnki(CNKI_SEARCH_URL)
     try:
         current_url, current_text = await _page_state(tab)
@@ -118,14 +118,14 @@ async def open_cnki_campus() -> str:
         await asyncio.sleep(8)
         url, text = await _page_state(tab)
         if await _has_visible_cnki_challenge(tab, url, text):
-            raise CNKIHumanRequired("CNKI 安全验证已在专用浏览器打开，请手动完成滑块后重试命令")
+            raise CNKIHumanRequired("CNKI güvenlik doğrulaması özel tarayıcıda açıldı; kaydırıcıyı elle tamamlayıp komutu yeniden çalıştırın")
         return url
     finally:
         await tab.close()
 
 
 async def search_cnki_campus(query: str, limit: int = 10) -> list[CNKIResult]:
-    """在当前校园网/CARSI 会话内检索 CNKI；遇滑块验证保留标签页并暂停。"""
+    """Geçerli kampüs ağı/CARSI oturumunda CNKI'de arar; kaydırıcı doğrulamada sekmeyi açık bırakıp durur."""
     tab = await _connect_or_open_cnki(CNKI_SEARCH_URL)
     try:
         url, text = await _page_state(tab)
@@ -134,7 +134,7 @@ async def search_cnki_campus(query: str, limit: int = 10) -> list[CNKIResult]:
             await asyncio.sleep(8)
             url, text = await _page_state(tab)
         if await _has_visible_cnki_challenge(tab, url, text):
-            raise CNKIHumanRequired("CNKI 安全验证已在专用浏览器打开，请手动完成滑块后重试检索")
+            raise CNKIHumanRequired("CNKI güvenlik doğrulaması özel tarayıcıda açıldı; kaydırıcıyı elle tamamlayıp aramayı yeniden deneyin")
 
         js = r'''
         (() => {
@@ -159,11 +159,11 @@ async def search_cnki_campus(query: str, limit: int = 10) -> list[CNKIResult]:
         result = await tab.cmd("Runtime.evaluate", {"expression": js, "returnByValue": True})
         action = str(result.get("result", {}).get("value", ""))
         if action != "submitted":
-            raise CNKIError(f"CNKI 搜索控件未识别: {action}")
+            raise CNKIError(f"CNKI arama denetimi tanınmadı: {action}")
         await asyncio.sleep(10)
         url, text = await _page_state(tab)
         if await _has_visible_cnki_challenge(tab, url, text):
-            raise CNKIHumanRequired("CNKI 搜索后出现安全验证，请在专用浏览器完成滑块后重试")
+            raise CNKIHumanRequired("CNKI aramasından sonra güvenlik doğrulaması çıktı; özel tarayıcıda kaydırıcıyı tamamlayıp yeniden deneyin")
 
         result_js = r'''
         (() => {
@@ -207,7 +207,7 @@ async def _find_cnki_download(tab: chrome_cdp.Tab) -> tuple[str, str]:
 
 
 async def _connect_existing_cnki_verification() -> chrome_cdp.Tab | None:
-    """复用已打开的 bar.cnki.net 验证标签，避免重复创建验证。"""
+    """Açık bar.cnki.net doğrulama sekmesini yeniden kullanır; doğrulamanın tekrar oluşturulmasını önler."""
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             pages = (await client.get(
@@ -227,7 +227,7 @@ async def _connect_existing_cnki_verification() -> chrome_cdp.Tab | None:
 
 
 async def _click_cnki_download(tab: chrome_cdp.Tab, kind: str) -> chrome_cdp.Tab | None:
-    """以浏览器真实点击打开 CNKI 下载/验证标签。"""
+    """CNKI indirme/doğrulama sekmesini gerçek bir tarayıcı tıklamasıyla açar."""
     selector = "#pdfDown, [name=pdfDown]" if kind == "pdf" else "#cajDown, [name=cajDown]"
     result = await tab.cmd("Runtime.evaluate", {
         "expression": f'''(() => {{
@@ -271,10 +271,10 @@ async def _click_cnki_download(tab: chrome_cdp.Tab, kind: str) -> chrome_cdp.Tab
 
 
 async def download_cnki_campus(article_url: str, dest: Path) -> dict:
-    """下载 CNKI PDF 或 CAJ，要求输出扩展名与实际格式一致。"""
+    """CNKI PDF'ini ya da CAJ'ını indirir; çıktı uzantısının gerçek biçimle aynı olmasını ister."""
     existing_verification = await _connect_existing_cnki_verification()
     if existing_verification:
-        raise CNKIHumanRequired("CNKI 下载验证页已在专用浏览器打开，请完成拼图后重试下载")
+        raise CNKIHumanRequired("CNKI indirme doğrulama sayfası özel tarayıcıda açıldı; yapbozu tamamlayıp indirmeyi yeniden deneyin")
     tab = await _connect_or_open_cnki(article_url)
     download_tab: chrome_cdp.Tab | None = None
     try:
@@ -282,18 +282,18 @@ async def download_cnki_campus(article_url: str, dest: Path) -> dict:
         await asyncio.sleep(10)
         url, text = await _page_state(tab)
         if await _has_visible_cnki_challenge(tab, url, text):
-            raise CNKIHumanRequired("CNKI 文献页出现安全验证，请完成滑块后重试下载")
+            raise CNKIHumanRequired("CNKI makale sayfasında güvenlik doğrulaması çıktı; kaydırıcıyı tamamlayıp indirmeyi yeniden deneyin")
         kind, file_url = await _find_cnki_download(tab)
         if kind not in {"pdf", "caj"} or not file_url:
-            raise CNKIError("未发现 CNKI PDF 或 CAJ 下载入口")
+            raise CNKIError("CNKI PDF ya da CAJ indirme bağlantısı bulunamadı")
         expected_suffix = f".{kind}"
         if dest.suffix.lower() != expected_suffix:
-            raise CNKIError(f"该条目提供 {kind.upper()}，请将 --output 设置为 {expected_suffix} 文件名")
+            raise CNKIError(f"bu kayıt {kind.upper()} sunuyor; --output değerini {expected_suffix} uzantılı bir dosya adı yapın")
         download_tab = await _click_cnki_download(tab, kind)
         if download_tab:
             download_url, download_text = await _page_state(download_tab)
             if "/verify/" in download_url or is_cnki_challenge(download_url, download_text):
-                raise CNKIHumanRequired("CNKI 下载验证页已在专用浏览器打开，请完成拼图后重试下载")
+                raise CNKIHumanRequired("CNKI indirme doğrulama sayfası özel tarayıcıda açıldı; yapbozu tamamlayıp indirmeyi yeniden deneyin")
             await download_tab.close_target()
             download_tab = None
         try:
@@ -302,7 +302,7 @@ async def download_cnki_campus(article_url: str, dest: Path) -> dict:
         except PDFError as first_error:
             file_ws = await chrome_cdp.create_tab_navigate(file_url, timeout=30)
             if not file_ws:
-                raise CNKIError(f"CNKI {kind.upper()} 授权链接无法打开: {first_error}") from first_error
+                raise CNKIError(f"CNKI {kind.upper()} yetkili bağlantısı açılamadı: {first_error}") from first_error
             file_tab = chrome_cdp.Tab(file_ws)
             await file_tab.connect()
             try:
@@ -311,7 +311,7 @@ async def download_cnki_campus(article_url: str, dest: Path) -> dict:
                     fetch = fetch_pdf_via_browser if kind == "pdf" else fetch_file_via_browser
                     return await fetch(file_tab, None, dest, referer=article_url) if kind == "pdf" else await fetch(file_tab, None, dest, "caj", referer=article_url)
                 except PDFError as second_error:
-                    raise CNKIError(f"CNKI {kind.upper()} 授权接口未返回文件: {second_error}") from second_error
+                    raise CNKIError(f"CNKI {kind.upper()} yetkilendirme arayüzü dosya döndürmedi: {second_error}") from second_error
             finally:
                 await file_tab.close_target()
     finally:
@@ -321,5 +321,5 @@ async def download_cnki_campus(article_url: str, dest: Path) -> dict:
 
 
 async def login_cnki_carsi() -> dict:
-    """校外 CNKI CARSI/机构登录入口。需在非校园网环境验证学校 SP 配置。"""
+    """Kampüs dışı CNKI CARSI/kurum girişi. Okulun SP yapılandırması kampüs ağı dışında doğrulanmalıdır."""
     return await auto_login(CNKI_CARSI_URL, host_hint="cnki.net")

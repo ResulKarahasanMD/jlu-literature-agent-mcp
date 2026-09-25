@@ -1,60 +1,64 @@
-# GitHub Release Checklist
+# GitHub sürüm kontrol listesi
 
-## Repository Content
+## Depo içeriği
 
-- [ ] `git status --short --untracked-files=all` contains no PDF, CAJ, XPI, `.env`, database,
-  browser profile, cookie, WebVPN token, log, extracted full text, or user-specific report.
-- [ ] Search tracked content for usernames, email addresses, absolute home paths, API keys,
-  tokens, and signed URLs.
-- [ ] Confirm `IMPLEMENTATION_PLAN.md` and local WebVPN experiment scripts remain untracked.
-- [ ] Confirm all test fixtures are synthetic and contain no protected article text.
-- [ ] Confirm enzyme-data schemas retain DOI/page/table/figure/supplement evidence locations
-  and do not silently fill missing conditions.
+- [ ] `git status --short --untracked-files=all` çıktısında PDF, CAJ, XPI, `.env`,
+  veritabanı, tarayıcı profili, çerez, WebVPN token'ı, günlük, çıkarılmış tam metin ya da
+  kullanıcıya özgü rapor yok.
+- [ ] İzlenen içerikte kullanıcı adları, e-posta adresleri, mutlak ev dizini yolları, API
+  anahtarları, token'lar ve imzalı URL'ler arandı.
+- [ ] `IMPLEMENTATION_PLAN.md` ve yerel WebVPN deneme betiklerinin izlenmediği doğrulandı.
+- [ ] Tüm test fixture'larının sentetik olduğu ve korumalı makale metni içermediği doğrulandı.
+- [ ] Enzim verisi şemalarının DOI/sayfa/tablo/şekil/ek materyal kanıt konumlarını koruduğu ve
+  eksik koşulları sessizce doldurmadığı doğrulandı.
 
-## Metadata and Legal
+## Metadata ve hukuk
 
-- [ ] Verify `project.urls` still point to the intended public repository before tagging.
-- [ ] Confirm maintainer name/contact and copyright wording.
-- [ ] Keep ZotSeek XPI external until its upstream license file is authoritative.
-- [ ] Generate and review a dependency-license report before distributing wheels/binaries.
-- [ ] Enable GitHub Private Vulnerability Reporting.
+- [ ] Etiketlemeden önce `project.urls`'in hâlâ hedeflenen açık depoyu gösterdiği doğrulandı.
+- [ ] Bakımcı adı/iletişim bilgisi ve telif ifadesi doğrulandı.
+- [ ] ZotSeek XPI'ı, upstream lisans dosyası yetkili hale gelene kadar harici tutuluyor.
+- [ ] Wheel/binary dağıtmadan önce bağımlılık lisans raporu üretildi ve incelendi.
+- [ ] GitHub Private Vulnerability Reporting açıldı.
 
-## Verification
+## Doğrulama
 
 - [ ] `uv lock --check`
-- [ ] `uv sync --locked --extra dev` with no active MCP executable lock.
+- [ ] Etkin bir MCP çalıştırılabilir kilidi yokken `uv sync --locked --extra dev`.
 - [ ] `uv run ruff check .`
 - [ ] `uv run pytest`
 - [ ] `uv build`
-- [ ] Install the built wheel in a clean temporary environment and run `litlib --version`.
-- [ ] `litlib learn list` runs from the clean wheel install and reports an empty library
-  without error (personal experience is runtime-local, never packaged).
-- [ ] `litlib uniprot`, `litlib evidence scan`, `litlib supplement discover`, and
-  `litlib cellulase validate/maxima` pass local smoke tests without a live publisher session.
-- [ ] Supplementary artifacts use `staging/supplements`, have a sanitized manifest, and are
-  never confused with the primary article PDF.
-- [ ] Validate OpenCode and Codex config examples on clean client restarts.
-- [ ] Distribute the entire skill directory and verify references resolve.
-- [ ] Run one OA smoke test with a redistributable test DOI.
-- [ ] Run institutional smoke tests only in a supervised authorized JLU session.
+- [ ] Üretilen wheel temiz bir geçici ortama kuruldu ve `litlib --version` çalıştırıldı.
+- [ ] `litlib learn list` temiz wheel kurulumundan çalışıyor ve hatasız olarak boş kütüphane
+  raporluyor (kişisel deneyim çalışma zamanında yereldir, asla paketlenmez).
+- [ ] `litlib uniprot`, `litlib evidence scan`, `litlib supplement discover` ve
+  `litlib cellulase validate/maxima`, canlı yayıncı oturumu olmadan yerel smoke testlerden
+  geçiyor.
+- [ ] Ek dosyalar `staging/supplements` kullanıyor, maskelenmiş bir manifestleri var ve ana
+  makale PDF'iyle asla karıştırılmıyor.
+- [ ] OpenCode ve Codex yapılandırma örnekleri istemciler temiz biçimde yeniden
+  başlatılarak doğrulandı.
+- [ ] Skill dizininin tamamı dağıtıldı ve referansların çözümlendiği doğrulandı.
+- [ ] Yeniden dağıtılabilir bir test DOI'siyle bir OA smoke testi çalıştırıldı.
+- [ ] Kurum smoke testleri yalnız gözetimli, yetkili bir JLU oturumunda çalıştırıldı.
 
-## Personal Experience
+## Kişisel deneyim
 
-- [ ] Confirm `experience.py`, `test_experience.py`, and the `learn` CLI command are included
-  in the sdist/wheel and covered by CI (`uv run pytest`).
-- [ ] Confirm `experiences.json` and the `experience/` runtime directory are absent from the
-  repo (git-ignored; default `LITLIB_RUNTIME_ROOT` lives outside the clone).
-- [ ] Confirm automatic learning is wired only to verified successes: PAYWALLED /
-  HUMAN_REQUIRED / RATE_LIMITED / FAILED routes cannot be recorded.
-- [ ] Confirm all experience fields are sanitized before write (URL query tokens, WebVPN
-  tokens, cookies, credentials redacted).
-- [ ] README and skill `SKILL.md` document `litlib learn list | add | remove | export` and the
-  precedence rule (personal experience over canonical `SITE_RECIPES.md`).
+- [ ] `experience.py`, `test_experience.py` ve `learn` CLI komutunun sdist/wheel'e dahil
+  olduğu ve CI (`uv run pytest`) tarafından kapsandığı doğrulandı.
+- [ ] `experiences.json` ve `experience/` çalışma zamanı dizininin depoda olmadığı doğrulandı
+  (git yok sayar; varsayılan `LITLIB_RUNTIME_ROOT` klonun dışındadır).
+- [ ] Otomatik öğrenmenin yalnız doğrulanmış başarılara bağlı olduğu doğrulandı: PAYWALLED /
+  HUMAN_REQUIRED / RATE_LIMITED / FAILED rotaları kaydedilemez.
+- [ ] Tüm deneyim alanlarının yazılmadan önce maskelendiği doğrulandı (URL query token'ları,
+  WebVPN token'ları, çerezler, kimlik bilgileri gizlenir).
+- [ ] README ve skill `SKILL.md`, `litlib learn list | add | remove | export` komutlarını ve
+  öncelik kuralını (kişisel deneyim kanonik `SITE_RECIPES.md`'den önce gelir) belgeliyor.
 
-## Documentation
+## Belgeler
 
-- [ ] README does not claim LitLib itself is a comprehensive scholarly search database.
-- [ ] Every site recipe has date, evidence label, access mode, successful/failed routes, and
-  stop condition.
-- [ ] Known unverified paths remain labelled unverified.
-- [ ] Release notes distinguish unit-tested behavior from live-site observations.
+- [ ] README, LitLib'in kendisinin kapsamlı bir akademik arama veritabanı olduğunu iddia
+  etmiyor.
+- [ ] Her site tarifinde tarih, kanıt etiketi, erişim modu, başarılı/başarısız rotalar ve
+  durma koşulu var.
+- [ ] Bilinen doğrulanmamış yollar doğrulanmamış olarak etiketli kalıyor.
+- [ ] Sürüm notları birim testli davranışı canlı site gözlemlerinden ayırıyor.

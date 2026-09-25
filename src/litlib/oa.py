@@ -1,4 +1,4 @@
-"""OA 通道：发现公开全文候选，下载阶段按候选逐一验证。"""
+"""OA kanalları: açık tam metin adaylarını bulur; indirme aşamasında her aday tek tek doğrulanır."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from litlib.models import Work
+from litlib.models import Work, arxiv_id_from_doi
 
 UNPAYWALL_BASE = "https://api.unpaywall.org/v2"
 EUROPE_PMC_BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest"
@@ -71,33 +71,34 @@ def _pick_pdf_url(links: list[dict]) -> str | None:
 
 async def unpaywall(client: httpx.AsyncClient, work: Work) -> OAResult:
     if not work.doi:
-        return OAResult(False, note="无 DOI")
+        return OAResult(False, note="DOI yok")
     email = os.environ.get("LITLIB_EMAIL", "litlib@example.invalid")
     if email.endswith("invalid"):
-        return OAResult(False, note="未配置 LITLIB_EMAIL，跳过 Unpaywall")
+        return OAResult(False, note="LITLIB_EMAIL ayarlı değil, Unpaywall atlandı")
     data = await _get(client, f"{UNPAYWALL_BASE}/{work.doi}?email={email}")
     if not data or not data.get("is_oa"):
-        return OAResult(False, note="Unpaywall 非 OA")
+        return OAResult(False, note="Unpaywall: OA değil")
     loc = data.get("best_oa_location") or {}
     url = loc.get("url_for_pdf") or loc.get("url")
     if not url:
-        return OAResult(False, note="Unpaywall 无可用链接")
+        return OAResult(False, note="Unpaywall: kullanılabilir bağlantı yok")
     return OAResult(True, url=url, channel="unpaywall")
 
 
 async def arxiv_direct(client: httpx.AsyncClient, work: Work) -> OAResult:
-    if not work.arxiv:
-        return OAResult(False, note="无 arXiv ID")
-    return OAResult(True, url=f"https://arxiv.org/pdf/{work.arxiv}", channel="arxiv")
+    arxiv = work.arxiv or arxiv_id_from_doi(work.doi)
+    if not arxiv:
+        return OAResult(False, note="arXiv ID yok")
+    return OAResult(True, url=f"https://arxiv.org/pdf/{arxiv}", channel="arxiv")
 
 
 async def mdpi_static_pdf(client: httpx.AsyncClient, work: Work) -> OAResult:
-    """构造 MDPI 公开静态 PDF，绕过主站 HTML 风控页。"""
+    """MDPI'nin herkese açık statik PDF adresini kurar; ana sitenin HTML risk kontrol sayfasına uğramaz."""
     if not work.doi or not work.doi.lower().startswith("10.3390/"):
-        return OAResult(False, note="非 MDPI DOI")
+        return OAResult(False, note="MDPI DOI'si değil")
     match = re.fullmatch(r"10\.3390/([a-z]+)(\d{2})(\d{2})(\d+)", work.doi.lower())
     if not match:
-        return OAResult(False, note="MDPI DOI 格式未识别")
+        return OAResult(False, note="MDPI DOI biçimi tanınmadı")
     prefix, volume, _issue, article = match.groups()
     slug = {"antib": "antibodies", "biom": "biomolecules"}.get(prefix, prefix)
     filename = f"{slug}-{int(volume):02d}-{int(article):05d}.pdf"
@@ -107,15 +108,15 @@ async def mdpi_static_pdf(client: httpx.AsyncClient, work: Work) -> OAResult:
 
 async def europe_pmc(client: httpx.AsyncClient, work: Work) -> OAResult:
     if not (work.pmcid or work.pmid):
-        return OAResult(False, note="无 PMC/PMID")
+        return OAResult(False, note="PMC/PMID yok")
     query = work.pmcid or f"PMID:{work.pmid}"
     data = await _get(client, f"{EUROPE_PMC_BASE}/search?query={query}&format=json")
     results = (data or {}).get("resultList", {}).get("result", [])
     if not results:
-        return OAResult(False, note="Europe PMC 无记录")
+        return OAResult(False, note="Europe PMC: kayıt yok")
     r = results[0]
     if r.get("isOpenAccess") != "Y":
-        return OAResult(False, note="Europe PMC 非开放")
+        return OAResult(False, note="Europe PMC: açık değil")
     if r.get("pmcid"):
         url = f"https://europepmc.org/articles/{r['pmcid']}?pdf=render"
     else:
@@ -125,27 +126,27 @@ async def europe_pmc(client: httpx.AsyncClient, work: Work) -> OAResult:
 
 async def crossref_link(client: httpx.AsyncClient, work: Work) -> OAResult:
     if not work.doi:
-        return OAResult(False, note="无 DOI")
+        return OAResult(False, note="DOI yok")
     data = await _get(client, f"{CROSSREF_BASE}/{work.doi}")
     msg = (data or {}).get("message", {})
     licenses = [str(item.get("URL") or "").lower() for item in msg.get("license") or []]
     if not any(any(marker in url for marker in OPEN_LICENSE_MARKERS) for url in licenses):
-        return OAResult(False, note="Crossref 链接未证明为 OA")
+        return OAResult(False, note="Crossref bağlantısının OA olduğu kanıtlanmadı")
     url = _pick_pdf_url(msg.get("link") or [])
     if not url:
-        return OAResult(False, note="Crossref 无链接")
+        return OAResult(False, note="Crossref: bağlantı yok")
     return OAResult(True, url=url, channel="crossref_link")
 
 
 async def openalex_oa(client: httpx.AsyncClient, work: Work) -> OAResult:
     if not work.doi:
-        return OAResult(False, note="无 DOI")
+        return OAResult(False, note="DOI yok")
     data = await _get(client, f"{OPENALEX_BASE}/doi:{work.doi}")
     if not data:
-        return OAResult(False, note="OpenAlex 无记录")
+        return OAResult(False, note="OpenAlex: kayıt yok")
     oa = data.get("open_access") or {}
     candidates = []
-    # Direct PDF locations precede landing pages.
+    # Doğrudan PDF konumları açılış sayfalarından önce gelir.
     for loc in data.get("locations") or []:
         if loc.get("is_oa") and loc.get("pdf_url"):
             candidates.append(loc["pdf_url"])
@@ -157,18 +158,18 @@ async def openalex_oa(client: httpx.AsyncClient, work: Work) -> OAResult:
     for url in candidates:
         if url:
             return OAResult(True, url=url, channel="openalex")
-    return OAResult(False, note="OpenAlex 非 OA")
+    return OAResult(False, note="OpenAlex: OA değil")
 
 
 async def find_oa(client: httpx.AsyncClient, work: Work) -> OAResult:
     candidates = await find_oa_candidates(client, work)
     if candidates:
         return candidates[0]
-    return OAResult(False, note="所有 OA 通道均未命中")
+    return OAResult(False, note="hiçbir OA kanalı sonuç vermedi")
 
 
 async def find_oa_candidates(client: httpx.AsyncClient, work: Work) -> list[OAResult]:
-    """返回去重后的 OA 候选；单个 provider 故障不阻断后续 provider。"""
+    """Tekilleştirilmiş OA adaylarını döndürür; tek bir sağlayıcının arızası sonrakileri engellemez."""
     candidates: list[OAResult] = []
     seen: set[str] = set()
     for fn in (arxiv_direct, mdpi_static_pdf, unpaywall, europe_pmc, openalex_oa, crossref_link):

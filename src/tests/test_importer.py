@@ -1,4 +1,4 @@
-"""测试：导入提案生成（RIS + 清单）。"""
+"""Testler: içe aktarma önerisi üretimi (RIS + liste)."""
 
 from __future__ import annotations
 
@@ -79,7 +79,7 @@ class TestRis:
                 pdf.write_bytes(b"%PDF-1.4\n%%EOF")
             st.add_file(task["work_id"], str(pdf), str(index) * 64, 20, "test")
 
-        with pytest.raises(ValueError, match="缺少可用 PDF"):
+        with pytest.raises(ValueError, match="kullanılabilir PDF yok"):
             build_proposal(st, out_dir=tmp_path / "out")
 
         assert not list((tmp_path / "out").glob("proposal_*"))

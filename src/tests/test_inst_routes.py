@@ -54,7 +54,7 @@ async def test_browser_fetch_size_limit(tmp_path):
                 return {}
             return {"result": {"value": "OK:6000"}}
 
-    with pytest.raises(PDFError, match="大小上限"):
+    with pytest.raises(PDFError, match="boyut üst sınır"):
         await fetch_pdf_via_browser(
             FakeTab(), "https://example.test/a.pdf", tmp_path / "a.pdf", max_bytes=5000)
 
@@ -66,7 +66,7 @@ async def test_gateway_failure_cleans_partial_file(tmp_path):
 
     dest = tmp_path / "out.pdf"
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-        with pytest.raises(PDFError, match="非 PDF"):
+        with pytest.raises(PDFError, match="PDF değil"):
             await download_via_gateway(client, {}, "https://vpn.example.test/x", dest)
     assert not dest.exists()
     assert not dest.with_suffix(".part").exists()
@@ -95,7 +95,7 @@ async def test_fill_idp_login_refuses_untrusted_host():
         async def cmd(self, method, params=None):
             return {"result": {"value": "https://publisher.example/login"}}
 
-    with pytest.raises(PermissionError, match="非受信 IdP"):
+    with pytest.raises(PermissionError, match="güvenilir olmayan IdP"):
         await fill_idp_login(FakeTab(), "student", "password")
 
 
