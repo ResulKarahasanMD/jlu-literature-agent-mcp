@@ -46,6 +46,7 @@ IMPLEMENTATION_PLAN.md
 *.part
 *.tmp
 Thumbs.db
+.DS_Store
 
 # Editörler
 .idea/
