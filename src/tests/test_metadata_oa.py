@@ -11,12 +11,20 @@ from litlib.metadata import (
     _crossref_to_work,
     _datacite_to_work,
     _pubmed_to_work,
+    fetch_metadata,
     merge_work,
     resolve_by_arxiv,
     resolve_by_doi,
 )
-from litlib.models import Work
-from litlib.oa import crossref_link, find_oa, find_oa_candidates, mdpi_static_pdf, unpaywall
+from litlib.models import Work, arxiv_id_from_doi
+from litlib.oa import (
+    arxiv_direct,
+    crossref_link,
+    find_oa,
+    find_oa_candidates,
+    mdpi_static_pdf,
+    unpaywall,
+)
 
 CROSSREF_MSG = {
     "DOI": "10.1000/XYZ.2024.123",
@@ -157,6 +165,43 @@ class TestResolveByDOI:
             w = await resolve_by_arxiv(client, "2401.00001")
         assert w.title == "A useful preprint"
         assert w.doi == "10.1000/xyz"
+
+
+class TestArxivDOI:
+    """arXiv 的 DataCite DOI（10.48550/arXiv.<id>）必须映射到 arXiv ID。"""
+
+    def test_arxiv_id_from_doi(self):
+        assert arxiv_id_from_doi("10.48550/arXiv.1706.03762") == "1706.03762"
+        assert arxiv_id_from_doi("https://doi.org/10.48550/ARXIV.2401.00001") == "2401.00001"
+        assert arxiv_id_from_doi("10.48550/arXiv.hep-th/9901001") == "hep-th/9901001"
+        assert arxiv_id_from_doi("10.1038/s41586-025-08610-1") is None
+        assert arxiv_id_from_doi(None) is None
+
+    @pytest.mark.asyncio
+    async def test_arxiv_direct_derives_id_from_doi(self):
+        result = await arxiv_direct(None, Work(doi="10.48550/arxiv.1706.03762"))
+        assert result.found
+        assert result.url == "https://arxiv.org/pdf/1706.03762"
+
+    @pytest.mark.asyncio
+    async def test_fetch_metadata_sets_arxiv_from_datacite_doi(self):
+        datacite = {"attributes": {
+            "doi": "10.48550/ARXIV.1706.03762",
+            "titles": [{"title": "Attention Is All You Need"}],
+            "publicationYear": 2017,
+            "creators": [{"familyName": "Vaswani", "givenName": "Ashish"}],
+            "types": {"resourceTypeGeneral": "Preprint"},
+        }}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "datacite" in str(request.url):
+                return httpx.Response(200, json={"data": datacite})
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            w = await fetch_metadata(client, Work(doi="10.48550/arxiv.1706.03762"))
+        assert w.title == "Attention Is All You Need"
+        assert w.arxiv == "1706.03762"
 
 
 class TestOAFind:

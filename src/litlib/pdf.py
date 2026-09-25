@@ -7,7 +7,7 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-from litlib.models import normalize_doi
+from litlib.models import arxiv_id_from_doi, normalize_doi
 
 
 class PDFError(Exception):
@@ -26,6 +26,11 @@ def _doi_in_text(doi: str, text: str) -> bool:
     """匹配 DOI 本身，允许 PDF 文本提取在 DOI 内插入换行。"""
     pattern = r"\s*".join(re.escape(char) for char in doi)
     return bool(re.search(pattern, text, re.I))
+
+
+def _arxiv_stamp_in_text(arxiv_id: str, text: str) -> bool:
+    """arXiv PDF 页边戳记（arXiv:<id>v<n>）不含 DOI；以完全相同的 arXiv ID 作为身份依据。"""
+    return bool(re.search(rf"arXiv:\s*{re.escape(arxiv_id)}(?:v\d+)?(?![\d.])", text, re.I))
 
 
 def validate_pdf(path: Path | str) -> tuple[int, int]:
@@ -68,6 +73,9 @@ def validate_pdf_for_work(path: Path | str, doi: str | None = None) -> tuple[int
 
     if _SUPPLEMENT_RE.search(first_text[:5_000]):
         raise PDFError("检测到补充材料，不是正文 PDF")
+    arxiv_id = arxiv_id_from_doi(doi)
+    if arxiv_id and _arxiv_stamp_in_text(arxiv_id, first_page_text):
+        return n_pages, chars
     if doi:
         expected = normalize_doi(doi)
         first_page_found = {
