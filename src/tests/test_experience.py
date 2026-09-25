@@ -1,4 +1,4 @@
-"""个人经验库（learn）测试：存储、去重合并、脱敏、查询与渲染。"""
+"""Kişisel deneyim kütüphanesi (learn) testleri: saklama, tekilleştirerek birleştirme, maskeleme, sorgulama ve oluşturma."""
 
 from __future__ import annotations
 
@@ -9,10 +9,10 @@ from litlib import experience
 
 @pytest.fixture(autouse=True)
 def isolated_experience(tmp_path, monkeypatch):
-    """把经验文件隔离到临时目录，避免污染真实运行数据。
+    """Deneyim dosyasını geçici dizine yalıtır, gerçek çalışma verisinin kirlenmesini önler.
 
-    CI runner 项目位于 D 盘但 pytest tmp 位于 C 盘时，D 盘守卫会误伤测试；
-    这里显式关闭守卫，让测试与机器磁盘策略解耦。
+    CI runner'da proje D sürücüsünde, pytest tmp C sürücüsündeyken D sürücüsü koruması testleri yanlışlıkla engeller;
+    burada koruma açıkça kapatılır, böylece testler makinenin disk politikasından bağımsız olur.
     """
     from litlib import config
 
@@ -115,7 +115,7 @@ def test_find_for_sorts_by_success_count(isolated_experience):
 
 def test_render_markdown_empty(isolated_experience):
     text = experience.render_markdown()
-    assert "空" in text
+    assert "boş" in text
     assert "learn add" in text
 
 
@@ -138,7 +138,7 @@ def test_corrupt_file_returns_empty(isolated_experience):
 
 
 def test_ensure_storage_path_respected(monkeypatch, tmp_path, isolated_experience):
-    """非 D 盘且要求 D 盘时应拒绝写入经验文件。"""
+    """D sürücüsü zorunluyken D dışındaki bir yola deneyim dosyası yazılması reddedilmelidir."""
     from litlib import config
 
     monkeypatch.setattr(config, "require_d_drive", lambda: True)

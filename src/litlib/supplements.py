@@ -1,4 +1,4 @@
-"""Discover, download, and validate supplementary research artifacts."""
+"""Ek araştırma dosyalarını bulur, indirir ve doğrular."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ class SupplementCandidate:
     source: str = "article_page"
 
     def safe_dict(self) -> dict:
-        """Public representation; signed query material is never emitted."""
+        """Dışa açık gösterim; imzalı query içeriği asla yazdırılmaz."""
         return {
             "url": sanitize(self.url),
             "label": self.label,
@@ -45,7 +45,7 @@ def discover_supplement_candidates(
     html: str,
     article_url: str,
 ) -> list[SupplementCandidate]:
-    """Extract likely supplement links from article HTML without requiring bs4."""
+    """bs4 gerektirmeden makale HTML'inden olası ek dosya bağlantılarını çıkarır."""
     link_re = re.compile(
         r"<a\b[^>]*?href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", re.I | re.S
     )
@@ -68,24 +68,24 @@ def discover_supplement_candidates(
 
 
 def validate_supplement(path: Path | str, media_type: str = "") -> dict:
-    """Validate supported artifact signatures; supplementary PDFs need not contain a DOI."""
+    """Desteklenen dosya imzalarını doğrular; ek PDF'lerin DOI içermesi gerekmez."""
     artifact = Path(path)
     if not artifact.exists() or artifact.stat().st_size == 0:
-        raise ValueError(f"补充文件不存在或为空: {artifact}")
+        raise ValueError(f"ek dosya yok ya da boş: {artifact}")
     suffix = artifact.suffix.lower()
     with artifact.open("rb") as handle:
         head = handle.read(8)
     if suffix == ".pdf" or "pdf" in media_type.lower():
         if not head.startswith(b"%PDF-"):
-            raise ValueError("补充文件不是 PDF")
+            raise ValueError("ek dosya PDF değil")
         with artifact.open("rb") as handle:
             handle.seek(max(0, artifact.stat().st_size - 16_384))
             tail = handle.read()
         if b"%%EOF" not in tail:
-            raise ValueError("补充 PDF 缺少 %%EOF")
+            raise ValueError("ek PDF'te %%EOF yok")
         pages = len(PdfReader(str(artifact), strict=False).pages)
         if pages < 1:
-            raise ValueError("补充 PDF 无页面")
+            raise ValueError("ek PDF'te sayfa yok")
         kind = "pdf"
         page_count = pages
     elif suffix in {".xlsx", ".xls", ".zip"} or head.startswith(b"PK") or head[:4] == b"\xD0\xCF\x11\xE0":
@@ -95,7 +95,7 @@ def validate_supplement(path: Path | str, media_type: str = "") -> dict:
         kind = "csv_or_text"
         page_count = None
     else:
-        raise ValueError(f"不支持的补充文件格式: {artifact.suffix}")
+        raise ValueError(f"desteklenmeyen ek dosya biçimi: {artifact.suffix}")
     return {
         "path": str(artifact),
         "artifact_type": kind,
@@ -130,10 +130,10 @@ async def download_supplement(
     overwrite: bool = False,
     max_bytes: int = 500 * 1024 * 1024,
 ) -> dict:
-    """Download and validate one supplement; append a sanitized manifest record."""
+    """Tek bir ek dosyayı indirip doğrular; maskelenmiş bir manifest kaydı ekler."""
     ensure_storage_path(dest)
     if dest.exists() and not overwrite:
-        raise FileExistsError(f"目标文件已存在，未覆盖: {dest}")
+        raise FileExistsError(f"hedef dosya zaten var, üzerine yazılmadı: {dest}")
     _, digest, size = await download_to_file(client, candidate.url, dest, max_bytes=max_bytes)
     validation = validate_supplement(dest, candidate.media_type)
     record = {

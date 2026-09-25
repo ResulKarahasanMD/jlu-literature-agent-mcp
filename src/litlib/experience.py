@@ -1,12 +1,12 @@
-"""个人经验库：本地自进化（learn）。
+"""Kişisel deneyim kütüphanesi: yerel olarak kendini geliştirme (learn).
 
-canonical 站点经验（仓库内 SITE_RECIPES.md）保持只读、随 Git 分发；本模块把每个用户在
-本地成功解决过的、未收录网站的路线写入运行目录（git 忽略），下次遇到同一站点时
-Agent 优先读取个人经验，实现"用一次、记一次、越用越顺"。
+Kanonik site deneyimi (depodaki SITE_RECIPES.md) salt-okur kalır ve Git ile dağıtılır; bu modül her
+kullanıcının yerelde başarıyla çözdüğü, listede olmayan sitelerin rotalarını çalışma dizinine (git yok sayar) yazar;
+aynı siteyle yeniden karşılaşınca Agent önce kişisel deneyimi okur: "bir kez kullan, bir kez kaydet, kullandıkça kolaylaşsın".
 
-合规边界与 canonical 相同：只有通过严格 PDF 校验（PDF success contract）的成功才
-允许自动记录；PAYWALLED / HUMAN_REQUIRED / RATE_LIMITED 不构成可学习经验；记录内容
-一律脱敏（URL 去 query token、WebVPN token、cookie、凭证字段），不保存任何密钥。
+Uyum sınırları kanonik olanla aynıdır: yalnız sıkı PDF doğrulamasından (PDF success contract) geçen
+başarılar otomatik kaydedilebilir; PAYWALLED / HUMAN_REQUIRED / RATE_LIMITED öğrenilebilir deneyim sayılmaz;
+kayıt içeriği her zaman maskelenir (URL query token'ı, WebVPN token'ı, çerezler, kimlik bilgisi alanları), hiçbir anahtar saklanmaz.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def _route_key(route: str) -> str:
 
 
 def load_experiences() -> list[dict]:
-    """读取全部个人经验；文件缺失或损坏时返回空列表（不抛异常）。"""
+    """Tüm kişisel deneyimleri okur; dosya yoksa ya da bozuksa boş liste döndürür (istisna fırlatmaz)."""
     try:
         if not EXPERIENCE_FILE.exists():
             return []
@@ -71,17 +71,17 @@ def record_success(
     doi_prefix: str = "",
     notes: str = "",
 ) -> dict:
-    """记录一次成功解决的经验；同 domain+route 合并计数，不重复追加。
+    """Başarıyla çözülmüş bir deneyimi kaydeder; aynı domain+route sayaçta birleştirilir, yinelenen kayıt eklenmez.
 
-    仅允许明确标记为成功的 route（见 _UNSAFE_ROUTES）；记录内容全部脱敏。
-    返回写入后的经验条目。
+    Yalnız açıkça başarılı işaretlenen route'lara izin verilir (bkz. _UNSAFE_ROUTES); kayıt içeriği tamamen maskelenir.
+    Yazılan deneyim kaydını döndürür.
     """
     domain_key = _domain_key(domain)
     if not domain_key:
-        raise ValueError("经验需要站点域名")
+        raise ValueError("deneyim için site alan adı gerekli")
     route_key = _route_key(route)
     if route_key in {r.lower() for r in _UNSAFE_ROUTES} or not route_key:
-        raise ValueError(f"不允许把 {route} 记录为成功经验")
+        raise ValueError(f"{route} başarılı deneyim olarak kaydedilemez")
 
     with _LOCK:
         experiences = load_experiences()
@@ -121,12 +121,12 @@ def add_manual(
     url_pattern: str = "",
     doi_prefix: str = "",
 ) -> dict:
-    """手动补充经验（人工观察、非本程序成功路径），route 允许任意非空描述。"""
+    """Elle deneyim ekler (insan gözlemi, bu programın başarılı yolu olmayan); route boş olmayan herhangi bir açıklama olabilir."""
     domain_key = _domain_key(domain)
     if not domain_key:
-        raise ValueError("经验需要站点域名")
+        raise ValueError("deneyim için site alan adı gerekli")
     if not notes.strip():
-        raise ValueError("手动经验必须有说明（--note）")
+        raise ValueError("elle eklenen deneyimin açıklaması (--note) olmalı")
     with _LOCK:
         experiences = load_experiences()
         for entry in experiences:
@@ -159,7 +159,7 @@ def add_manual(
 
 
 def remove_experience(exp_id: str) -> bool:
-    """按 id 删除一条经验；不存在返回 False。"""
+    """id ile bir deneyimi siler; yoksa False döndürür."""
     with _LOCK:
         experiences = load_experiences()
         remaining = [e for e in experiences if e.get("id") != exp_id]
@@ -170,7 +170,7 @@ def remove_experience(exp_id: str) -> bool:
 
 
 def find_for(domain: str, doi: str = "") -> list[dict]:
-    """返回与站点/DOI 前缀相关的全部经验（含子域匹配，按成功率排序）。"""
+    """Site/DOI önekiyle ilgili tüm deneyimleri döndürür (alt alan adı eşleşmesi dahil, başarı oranına göre sıralı)."""
     domain_key = _domain_key(domain)
     doi_prefix = doi.strip().lower() if doi else ""
     hits: list[dict] = []
@@ -189,28 +189,28 @@ def find_for(domain: str, doi: str = "") -> list[dict]:
 
 
 def render_markdown() -> str:
-    """把个人经验渲染成 Agent 可直接阅读的 Markdown（用于 learn export）。"""
+    """Kişisel deneyimleri Agent'ın doğrudan okuyabileceği Markdown'a dönüştürür (learn export için)."""
     experiences = load_experiences()
     if not experiences:
         return (
-            "# 个人经验库（空）\n\n还没有本地经验。每次成功解决新站点后会自动记录，"
-            "也可用 `litlib learn add --domain <域名> --route <路线> --note <说明>` 手动补充。\n"
+            "# Kişisel deneyim kütüphanesi (boş)\n\nHenüz yerel deneyim yok. Her yeni site başarıyla çözüldüğünde otomatik kaydedilir, "
+            "ya da `litlib learn add --domain <alan-adı> --route <rota> --note <açıklama>` ile elle eklenebilir.\n"
         )
-    lines = ["# 个人经验库（本地自进化）", "",
-             "> canonical 站点档案在仓库 `skills/litlib-literature-workflow/references/"
-             "SITE_RECIPES.md`，本文件是本地新增经验，读取顺序：先个人经验、后 canonical。",
+    lines = ["# Kişisel deneyim kütüphanesi (yerel, kendini geliştiren)", "",
+             "> Kanonik (canonical) site profilleri depoda, `skills/litlib-literature-workflow/references/"
+             "SITE_RECIPES.md` içinde; bu dosya yerelde eklenen deneyimlerdir. Okuma sırası: önce kişisel deneyim, sonra canonical.",
              ""]
     for e in experiences:
         lines.append(f"## {e.get('domain')}")
-        lines.append(f"- 路线: `{e.get('route')}`")
+        lines.append(f"- Rota: `{e.get('route')}`")
         if e.get("url_pattern"):
-            lines.append(f"- URL 模式: `{e.get('url_pattern')}`")
+            lines.append(f"- URL kalıbı: `{e.get('url_pattern')}`")
         if e.get("doi_prefix"):
-            lines.append(f"- DOI 前缀: `{e.get('doi_prefix')}`")
-        lines.append(f"- 成功次数: {int(e.get('success_count') or 0)}")
-        lines.append(f"- 来源: {e.get('source')} | 首次: {e.get('first_seen')}"
-                     + (f" | 最近成功: {e.get('last_success')}" if e.get("last_success") else ""))
+            lines.append(f"- DOI öneki: `{e.get('doi_prefix')}`")
+        lines.append(f"- Başarı sayısı: {int(e.get('success_count') or 0)}")
+        lines.append(f"- Kaynak: {e.get('source')} | İlk görülme: {e.get('first_seen')}"
+                     + (f" | Son başarı: {e.get('last_success')}" if e.get("last_success") else ""))
         if e.get("notes"):
-            lines.append(f"- 说明: {e.get('notes')}")
+            lines.append(f"- Açıklama: {e.get('notes')}")
         lines.append("")
     return "\n".join(lines)

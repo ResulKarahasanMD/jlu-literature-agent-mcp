@@ -1,10 +1,10 @@
-# Client and Installation Setup
+# İstemci ve kurulum ayarları
 
-## 1. Install LitLib from a Clone
+## 1. LitLib'i bir klondan kurun
 
-Requirements: Windows 10/11, Python 3.11-3.13, `uv`, Chrome or Edge, and Zotero 8/9.
-Institution credentials and JLU routes are Windows/JLU-specific; OA and metadata code can be
-developed elsewhere, but the institutional smoke tests are Windows-only.
+Gereksinimler: Windows 10/11, Python 3.11-3.13, `uv`, Chrome ya da Edge ve Zotero 8/9.
+Kurum kimlik bilgileri ve JLU rotaları Windows/JLU'ya özgüdür; OA ve metadata kodu başka yerde
+geliştirilebilir ama kurum smoke testleri yalnız Windows'ta yapılır.
 
 ```powershell
 git clone https://github.com/ganpingzhu904-dev/jlu-literature-agent-mcp.git
@@ -15,69 +15,74 @@ uv run litlib doctor
 uv run pytest
 ```
 
-Set a real contact email in `.env` for Unpaywall and polite API identification. Do not put a
-JLU password, Zotero password, API key, cookie, or VPN token in `.env`.
+Unpaywall ve API'lere nazik kimlik bildirimi için `.env` içine gerçek bir iletişim e-postası
+yazın. `.env` içine JLU parolası, Zotero parolası, API anahtarı, çerez ya da VPN token'ı
+koymayın.
 
-Storage settings:
+Depolama ayarları:
 
-- `LITLIB_RUNTIME_ROOT`: temp, cache, model, and dedicated Chrome profile root.
-- `LITLIB_ROOT`: writable state/output workspace for wheel or global installs. Editable
-  clones use the clone root automatically.
-- `LITLIB_ZOTERO_DATA`: Zotero data-directory fallback for attachment resolution.
-- `LITLIB_REQUIRE_D_DRIVE=1`: optional local policy for machines with a D: data drive.
-- `LITLIB_EXPORT_SESSION_COOKIES=0`: recommended default. `1` stores only a DPAPI-encrypted
-  backup bound to the current Windows user.
+- `LITLIB_RUNTIME_ROOT`: geçici dosyalar, önbellek, model ve özel Chrome profili kökü.
+- `LITLIB_ROOT`: wheel ya da global kurulumlar için yazılabilir durum/çıktı çalışma alanı.
+  Düzenlenebilir klonlar otomatik olarak klon kökünü kullanır.
+- `LITLIB_ZOTERO_DATA`: ek yolu çözümlemede Zotero veri dizini için yedek.
+- `LITLIB_REQUIRE_D_DRIVE=1`: D: veri sürücüsü olan makineler için isteğe bağlı yerel
+  politika.
+- `LITLIB_EXPORT_SESSION_COOKIES=0`: önerilen varsayılan. `1`, yalnız geçerli Windows
+  kullanıcısına bağlı DPAPI ile şifreli bir yedek saklar.
 
-## 2. Prepare Zotero
+## 2. Zotero'yu hazırlayın
 
-1. Install Zotero 8 or 9 from the official Zotero site.
-2. Start Zotero and confirm the active data directory under Advanced Files and Folders.
-3. Allow Zotero's local HTTP server in Advanced settings so `127.0.0.1:23119` responds.
-4. Keep Zotero running when using either MCP.
-5. Do not point LitLib at or directly edit `zotero.sqlite`.
+1. Zotero 8 ya da 9'u resmi Zotero sitesinden kurun.
+2. Zotero'yu başlatın ve Gelişmiş > Dosyalar ve Klasörler altında etkin veri dizinini
+   doğrulayın.
+3. `127.0.0.1:23119` yanıt versin diye Gelişmiş ayarlarda Zotero'nun yerel HTTP sunucusuna
+   izin verin.
+4. İki MCP'den birini kullanırken Zotero'yu açık tutun.
+5. LitLib'i `zotero.sqlite`'a yönlendirmeyin ya da bu dosyayı doğrudan düzenlemeyin.
 
-LitLib's import path is RIS plus a human confirmation. The RIS `L1` field references the
-verified local PDF. After import, `litlib import --lookup` verifies the parent item and PDF
-attachment through Zotero's Local API before setting `IMPORTED`.
+LitLib'in içe aktarma yolu RIS artı insan onayıdır. RIS'in `L1` alanı doğrulanmış yerel PDF'i
+gösterir. İçe aktarmadan sonra `litlib import --lookup`, `IMPORTED` ayarlamadan önce parent
+item'ı ve PDF ekini Zotero'nun Local API'si üzerinden doğrular.
 
-## 3. Install ZotSeek Separately
+## 3. ZotSeek'i ayrıca kurun
 
-ZotSeek is not bundled or redistributed by LitLib.
+ZotSeek LitLib ile birlikte paketlenmez ya da yeniden dağıtılmaz.
 
-1. For reproducibility, install the locally verified baseline ZotSeek `v1.18.0` from
-   `https://github.com/introfini/ZotSeek/releases/tag/v1.18.0`. A newer release must be
-   rechecked for tool schema, index behavior, storage, and licensing before this skill claims
-   equivalent behavior.
-2. In Zotero, open Tools > Plugins > gear menu > Install Plugin From File.
-3. Restart Zotero.
-4. In Zotero Settings > ZotSeek, enable AI Agent Access/MCP.
-5. Select an indexing mode and update the library index.
-6. Call `zotseek_index_status` and confirm active-model coverage is `N of N` for the intended
-   library before relying on search results.
+1. Yeniden üretilebilirlik için yerelde doğrulanmış temel sürüm ZotSeek `v1.18.0`'ı
+   `https://github.com/introfini/ZotSeek/releases/tag/v1.18.0` adresinden kurun. Bu skill
+   eşdeğer davranış iddia etmeden önce daha yeni bir sürümün araç şeması, indeks davranışı,
+   depolama ve lisans açısından yeniden kontrol edilmesi gerekir.
+2. Zotero'da Araçlar > Eklentiler > dişli menüsü > Eklentiyi Dosyadan Kur'u açın.
+3. Zotero'yu yeniden başlatın.
+4. Zotero Ayarlar > ZotSeek altında AI Agent Access/MCP'yi etkinleştirin.
+5. Bir indeksleme modu seçin ve kütüphane indeksini güncelleyin.
+6. Arama sonuçlarına güvenmeden önce `zotseek_index_status` çağırın ve hedef kütüphane için
+   etkin model kapsamının `N of N` olduğunu doğrulayın.
 
-Model guidance based on local testing and upstream documentation:
+Yerel testlere ve upstream belgelerine dayalı model önerileri:
 
-- `nomic-embed-text-v1.5`: bundled, English-focused, smallest setup burden.
-- `paraphrase-multilingual-MiniLM-L12-v2`: smaller multilingual option.
-- `multilingual-e5-base`: balanced multilingual model; on the tested English paper set,
-  Chinese queries still retrieved less reliably than equivalent English queries.
-- `BGE-M3`: larger multilingual option; use only when the accuracy benefit justifies model
-  size and re-indexing time.
+- `nomic-embed-text-v1.5`: paketle gelir, İngilizce odaklıdır, kurulum yükü en azdır.
+- `paraphrase-multilingual-MiniLM-L12-v2`: daha küçük çok dilli seçenek.
+- `multilingual-e5-base`: dengeli çok dilli model; test edilen İngilizce makale kümesinde
+  Çince sorgular yine de eşdeğer İngilizce sorgulardan daha az güvenilir sonuç verdi.
+- `BGE-M3`: daha büyük çok dilli seçenek; yalnız doğruluk kazancı model boyutunu ve yeniden
+  indeksleme süresini haklı çıkarıyorsa kullanın.
 
-Switching models requires coverage for the active model. Embeddings from another model do
-not make an item searchable with the newly active model.
+Model değiştirmek etkin model için kapsam gerektirir. Başka bir modelin embedding'leri bir
+öğeyi yeni etkin modelle aranabilir yapmaz.
 
-As checked on 2026-08-06, ZotSeek's README says MIT, but the repository root returned no
-`LICENSE` file and the GitHub API reported no detected license. Do not redistribute the XPI
-as part of LitLib until upstream licensing is unambiguous; link users to upstream Releases.
+2026-08-06'daki kontrole göre ZotSeek'in README'si MIT diyor, ama depo kökünde `LICENSE`
+dosyası bulunamadı ve GitHub API'si algılanmış bir lisans bildirmedi. Upstream lisansı
+belirsizliğini yitirene kadar XPI'ı LitLib'in parçası olarak yeniden dağıtmayın; kullanıcıları
+upstream Releases'a yönlendirin.
 
-## 4. Register Both MCP Servers
+## 4. İki MCP sunucusunu kaydedin
 
-Use absolute paths in client configuration. Replace `<repo>` with the actual clone path.
+İstemci yapılandırmasında mutlak yollar kullanın. `<repo>` yerine gerçek klon yolunu yazın.
 
 ### OpenCode
 
-Add to `~/.config/opencode/opencode.json` and preserve all existing fields:
+`~/.config/opencode/opencode.json` dosyasına ekleyin ve mevcut tüm alanları koruyun:
 
 ```json
 {
@@ -97,11 +102,12 @@ Add to `~/.config/opencode/opencode.json` and preserve all existing fields:
 }
 ```
 
-Restart OpenCode after editing config or installing/updating the skill.
+Yapılandırmayı düzenledikten ya da skill'i kurduktan/güncelledikten sonra OpenCode'u yeniden
+başlatın.
 
 ### Codex
 
-Add to `~/.codex/config.toml`:
+`~/.codex/config.toml` dosyasına ekleyin:
 
 ```toml
 [mcp_servers.litlib]
@@ -112,30 +118,31 @@ args = ["-m", "litlib.cli", "mcp"]
 url = "http://127.0.0.1:23119/zotseek/mcp"
 ```
 
-Restart Codex after editing config or installing/updating the skill.
+Yapılandırmayı düzenledikten ya da skill'i kurduktan/güncelledikten sonra Codex'i yeniden
+başlatın.
 
-For other MCP clients, register LitLib as a stdio server using
-`python.exe -m litlib.cli mcp`, and ZotSeek
-as a Streamable HTTP server at the URL above. Client-specific prefixes may change displayed
-tool names; use the tool descriptions, not only a hard-coded prefix.
+Diğer MCP istemcilerinde LitLib'i `python.exe -m litlib.cli mcp` ile stdio sunucusu, ZotSeek'i
+yukarıdaki URL'de Streamable HTTP sunucusu olarak kaydedin. İstemciye özgü önekler görünen
+araç adlarını değiştirebilir; yalnız sabit kodlu bir öneke değil, araç açıklamalarına bakın.
 
-## 5. Install the Skill
+## 5. Skill'i kurun
 
-Distribute the complete directory `skills/litlib-literature-workflow`, including
-`references/`. Installing only `SKILL.md` loses the troubleshooting knowledge.
+`references/` dahil olmak üzere `skills/litlib-literature-workflow` dizininin tamamını
+dağıtın. Yalnız `SKILL.md`'yi kurmak sorun giderme bilgisini kaybettirir.
 
-Common locations:
+Yaygın konumlar:
 
-- OpenCode project: `.opencode/skills/litlib-literature-workflow/`
+- OpenCode proje: `.opencode/skills/litlib-literature-workflow/`
 - OpenCode global: `~/.config/opencode/skills/litlib-literature-workflow/`
 - Codex global: `~/.codex/skills/litlib-literature-workflow/`
-- Agent Skills compatible clients: the client's documented skills directory
+- Agent Skills uyumlu istemciler: istemcinin belgelediği skills dizini
 
-Skills and MCP configuration are loaded at client startup. Restart after changes.
+Skill'ler ve MCP yapılandırması istemci başlarken yüklenir. Değişikliklerden sonra yeniden
+başlatın.
 
-## 6. Smoke Test
+## 6. Smoke test
 
-Run these without downloading a paywalled paper:
+Bunları ödeme duvarlı bir makale indirmeden çalıştırın:
 
 ```powershell
 uv run litlib doctor
@@ -143,15 +150,15 @@ uv run litlib status
 uv run litlib verify
 ```
 
-Expected nuance: `litlib verify` returns non-zero when there are no registered PDFs. That is
-intentional and prevents an empty verification from being reported as success.
+Beklenen ayrıntı: kayıtlı PDF yokken `litlib verify` sıfır dışı kod döndürür. Bu bilinçlidir
+ve boş bir doğrulamanın başarı olarak raporlanmasını önler.
 
-With Zotero running:
+Zotero çalışırken:
 
-1. Call `library_list_collections`.
-2. Call `library_search_metadata` with an exact known DOI.
-3. Call `zotseek_index_status`.
-4. Run one English hybrid query against an English-indexed paper.
+1. `library_list_collections` çağırın.
+2. Bilinen tam bir DOI ile `library_search_metadata` çağırın.
+3. `zotseek_index_status` çağırın.
+4. İngilizce indekslenmiş bir makaleye karşı bir İngilizce hibrit sorgu çalıştırın.
 
-Do not use a live institutional download as an unattended CI test. Publisher pages,
-credentials, and human challenges are tested only through supervised smoke tests.
+Canlı bir kurum indirmesini gözetimsiz bir CI testi olarak kullanmayın. Yayıncı sayfaları,
+kimlik bilgileri ve insan doğrulamaları yalnız gözetimli smoke testlerle test edilir.

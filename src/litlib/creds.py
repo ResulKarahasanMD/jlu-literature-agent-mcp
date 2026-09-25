@@ -1,8 +1,8 @@
-"""机构账号凭证与敏感数据保护（Windows 原生，零第三方依赖）。
+"""Kurum hesabı kimlik bilgileri ve hassas veri koruması (Windows yerel API'leri, sıfır üçüncü taraf bağımlılığı).
 
-- 账号密码：Windows 凭据管理器（CredWrite/CredRead），系统级加密，
-  仅当前 Windows 用户可读，不落盘明文。
-- 会话 cookie 备份：DPAPI（CryptProtectData）加密文件，密钥绑定当前用户。
+- Hesap parolası: Windows Kimlik Bilgisi Yöneticisi (CredWrite/CredRead), sistem düzeyinde şifreli,
+  yalnız geçerli Windows kullanıcısı okuyabilir, diske düz metin yazılmaz.
+- Oturum çerezi yedeği: DPAPI (CryptProtectData) ile şifreli dosya, anahtar geçerli kullanıcıya bağlı.
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ import os
 from ctypes import wintypes
 from pathlib import Path
 
-# Credential Manager and DPAPI exist only on Windows. Elsewhere (macOS BVU/GlobalProtect
-# setup) no institution password is used: reads report "no credential", writes fail loudly.
+# Kimlik Bilgisi Yöneticisi ve DPAPI yalnız Windows'ta var. Başka yerde (macOS BVU/GlobalProtect
+# kurulumu) kurum parolası kullanılmaz: okumalar "kimlik bilgisi yok" döner, yazmalar açıkça hata verir.
 IS_WINDOWS = os.name == "nt"
 
 
@@ -21,7 +21,7 @@ def _require_windows(feature: str) -> None:
     if not IS_WINDOWS:
         raise OSError(f"{feature} is only available on Windows")
 
-# ---- Windows 凭据管理器 -------------------------------------------------
+# ---- Windows Kimlik Bilgisi Yöneticisi---------------------------------------
 
 CRED_TYPE_GENERIC = 1
 CRED_PERSIST_LOCAL_MACHINE = 2
@@ -53,7 +53,7 @@ def save_cred(service: str, username: str, password: str) -> None:
         Flags=0,
         Type=CRED_TYPE_GENERIC,
         TargetName=service,
-        Comment="litlib 机构登录凭证",
+        Comment="litlib kurum girişi kimlik bilgisi",
         CredentialBlobSize=len(password.encode("utf-16-le")),
         CredentialBlob=blob,
         Persist=CRED_PERSIST_LOCAL_MACHINE,
@@ -61,7 +61,7 @@ def save_cred(service: str, username: str, password: str) -> None:
     )
     ok = ctypes.windll.advapi32.CredWriteW(ctypes.byref(cred), 0)
     if not ok:
-        raise OSError(f"CredWriteW 失败: {ctypes.get_last_error()}")
+        raise OSError(f"CredWriteW başarısız: {ctypes.get_last_error()}")
 
 
 def load_cred(service: str) -> tuple[str, str] | None:
@@ -90,7 +90,7 @@ def delete_cred(service: str) -> bool:
     return bool(ok)
 
 
-# ---- DPAPI 文件加密 ------------------------------------------------------
+# ---- DPAPI dosya şifreleme ----------------------------------------------
 
 CRYPTPROTECT_UI_FORBIDDEN = 0x1
 
@@ -108,7 +108,7 @@ def _dpapi(data: bytes, protect: bool) -> bytes:
     fn = ctypes.windll.crypt32.CryptProtectData if protect else ctypes.windll.crypt32.CryptUnprotectData
     ok = fn(ctypes.byref(in_blob), None, None, None, None, flags, ctypes.byref(out_blob))
     if not ok:
-        raise OSError(f"DPAPI 失败: {ctypes.get_last_error()}")
+        raise OSError(f"DPAPI başarısız: {ctypes.get_last_error()}")
     try:
         return ctypes.string_at(out_blob.pbData, out_blob.cbData)
     finally:
@@ -124,11 +124,11 @@ def decrypt_file(src: Path) -> bytes:
     return _dpapi(src.read_bytes(), protect=False)
 
 
-# ---- 便捷接口 ------------------------------------------------------------
+# ---- Kolaylık arayüzü--------------------------------------------------------
 
 SERVICE_ID = "litlib/jlu-institution"
 
-SESSION_COOKIE_FILE = None  # 由 config 注入
+SESSION_COOKIE_FILE = None  # config tarafından atanır
 
 
 def save_institution_cred(username: str, password: str) -> None:

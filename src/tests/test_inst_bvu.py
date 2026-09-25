@@ -1,4 +1,4 @@
-"""BVU (GlobalProtect VPN) institution branch: preflight, route selection, pacing."""
+"""BVU (GlobalProtect VPN) kurum kolu: ön kontrol, rota seçimi, hız ayarı."""
 
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ def _preflight(monkeypatch, ok: bool, evidence: str = "Access provided by Bezmia
     monkeypatch.setattr(inst.bvu, "vpn_preflight", fake)
 
 
-# ---- preflight -------------------------------------------------------------
+# ---- ön kontrol -----------------------------------------------------------
 
 def test_is_active_reads_env(monkeypatch):
     monkeypatch.delenv("LITLIB_INSTITUTION", raising=False)
@@ -99,10 +99,10 @@ async def test_preflight_uses_publisher_attribution(monkeypatch, status, fixture
     assert ok is expected
 
 
-# ---- CDP browser fallback when httpx hits an anti-bot wall -------------------
+# ---- httpx anti-bot duvarına takılınca CDP tarayıcısına geri düşme -------------------
 
 class FakeTab:
-    """Stands in for chrome_cdp.Tab; serves a fixture as the rendered page."""
+    """chrome_cdp.Tab yerine geçer; bir fixture'ı işlenmiş sayfa olarak sunar."""
 
     def __init__(self, html: str):
         self.html = html
@@ -115,7 +115,7 @@ class FakeTab:
         expression = (params or {}).get("expression", "")
         if "outerHTML" in expression:
             return {"result": {"value": self.html}}
-        text = bvu.re.sub(r"<[^>]+>", " ", self.html)  # what wait_for_human_challenge reads
+        text = bvu.re.sub(r"<[^>]+>", " ", self.html)  # wait_for_human_challenge'ın okuduğu metin
         return {"result": {"value": text}}
 
     async def close(self):
@@ -185,8 +185,8 @@ async def test_unsolved_challenge_waits_for_human_and_keeps_tab(monkeypatch, fak
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("status", "fixture"), [
-    (200, "sciencedirect_no_access.html"),   # genuine "no access" is not retried in Chrome
-    (429, "cloudflare_challenge.html"),      # rate limit stops, never escalates
+    (200, "sciencedirect_no_access.html"),   # gerçek "erişim yok" Chrome'da yeniden denenmez
+    (429, "cloudflare_challenge.html"),      # hız sınırı durdurur, asla bir üst adıma geçmez
 ])
 async def test_no_browser_escalation(fake_cdp, status, fixture):
     async with _client(status, _fixture(fixture)) as client:
@@ -209,7 +209,7 @@ async def test_browser_fallback_reports_missing_dedicated_chrome(monkeypatch):
     assert not ok and "litlib inst open" in reason
 
 
-# ---- run_inst behaviour under BVU -------------------------------------------
+# ---- BVU altında run_inst davranışı-----------------------------------------
 
 def test_rate_limits_unchanged():
     assert BATCH_LIMIT == 10
@@ -231,7 +231,7 @@ async def test_success_uses_only_direct_routes_and_paces(monkeypatch, bvu_env, s
     _preflight(monkeypatch, True)
 
     async def fake_browser(doi, dest):
-        dest.write_bytes(b"%PDF-1.7 " + doi.encode())  # distinct bytes: SHA-256 dedupe is real
+        dest.write_bytes(b"%PDF-1.7 " + doi.encode())  # farklı baytlar: SHA-256 tekilleştirmesi gerçekten çalışır
         return {"size": dest.stat().st_size, "content_type": "application/pdf"}
 
     monkeypatch.setattr("litlib.inst_login.download_doi_via_browser", fake_browser)
@@ -249,7 +249,7 @@ async def test_success_uses_only_direct_routes_and_paces(monkeypatch, bvu_env, s
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(("error", "expected"), [
-    ("HUMAN_REQUIRED: 人机验证尚未由用户完成", TaskState.HUMAN_REQUIRED),
+    ("HUMAN_REQUIRED: insan doğrulaması kullanıcı tarafından henüz tamamlanmadı", TaskState.HUMAN_REQUIRED),
     ("HTTP 429 too many requests", TaskState.RATE_LIMITED),
 ])
 async def test_checkpoint_stops_batch(monkeypatch, bvu_env, state, error, expected):

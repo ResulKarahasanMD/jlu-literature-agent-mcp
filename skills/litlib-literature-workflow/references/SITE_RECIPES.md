@@ -1,166 +1,168 @@
-# Publisher and Database Recipes
+# Yayıncı ve veritabanı tarifleri
 
-These records come from supervised tests on one Windows/JLU setup. Dates refer to the local
-verification session, not a permanent publisher guarantee. Recheck after major site changes.
+Bu kayıtlar tek bir Windows/JLU kurulumunda yapılan gözetimli testlerden gelir. Tarihler
+yerel doğrulama oturumunu gösterir, kalıcı bir yayıncı garantisi değildir. Büyük site
+değişikliklerinden sonra yeniden kontrol edin.
 
-Labels:
+Etiketler:
 
-- **Verified:** observed with a complete PDF that passed file and DOI checks.
-- **Observed restriction:** the failure/entitlement state was directly observed.
-- **Inferred:** a reasonable next attempt that still requires live verification.
+- **Verified (doğrulanmış):** dosya ve DOI kontrollerinden geçen tam bir PDF ile gözlendi.
+- **Observed restriction (gözlenen kısıt):** hata/yetki durumu doğrudan gözlendi.
+- **Inferred (çıkarım):** canlı doğrulama gerektiren makul bir sonraki deneme.
 
 ## Wiley (`10.1002`, `onlinelibrary.wiley.com`)
 
-**Verified, 2026-08-05.** The article showed full access, but direct retrieval of
-`/doi/epdf/{doi}` returned HTML and an unsigned `/doi/pdfdirect/{doi}` could return `403`.
+**Verified, 2026-08-05.** Makale tam erişim gösteriyordu, ama `/doi/epdf/{doi}`'yi doğrudan
+almak HTML döndürdü ve imzasız bir `/doi/pdfdirect/{doi}` `403` döndürebiliyordu.
 
-Successful route:
+Başarılı rota:
 
-1. Navigate the authenticated browser to `/doi/epdf/{doi}`.
-2. Inspect `performance.getEntriesByType('resource')`.
-3. Find the resource containing `/doi/pdfdirect/?hmac=...`.
-4. Fetch that signed URL from the same Wiley page context.
-5. Save only after full PDF validation.
+1. Kimliği doğrulanmış tarayıcıyla `/doi/epdf/{doi}`'ye gidin.
+2. `performance.getEntriesByType('resource')`'u inceleyin.
+3. `/doi/pdfdirect/?hmac=...` içeren kaynağı bulun.
+4. Bu imzalı URL'i aynı Wiley sayfa bağlamından fetch edin.
+5. Yalnız tam PDF doğrulamasından sonra kaydedin.
 
-Critical failure: CDP `Network.getResponseBody` returned a viewer byte-range response of
-about 262 KB. It began like a PDF but parsed as zero pages and lacked the complete file tail.
-Do not equate a PDF response fragment with a complete PDF.
+Kritik hata: CDP `Network.getResponseBody` yaklaşık 262 KB'lık bir görüntüleyici bayt aralığı
+yanıtı döndürdü. PDF gibi başlıyordu ama sıfır sayfa olarak ayrıştırıldı ve dosyanın tam sonu
+yoktu. Bir PDF yanıt parçasını tam bir PDF'le bir tutmayın.
 
-General inference: on viewer-based sites, inspect signed performance resources and range
-semantics before adding cookies or changing user agents.
+Genel çıkarım: görüntüleyici tabanlı sitelerde çerez eklemeden ya da user agent değiştirmeden
+önce imzalı performans kaynaklarını ve aralık semantiğini inceleyin.
 
 ## MDPI (`10.3390`, `www.mdpi.com`)
 
-**Verified, 2026-08-05.** The current article page exposes `a.UD_ArticlePDF`; its href can
-end in `/pdf?version=...` rather than the older `.pdf` pattern. Same-origin fetch returned a
-complete OA PDF.
+**Verified, 2026-08-05.** Güncel makale sayfası `a.UD_ArticlePDF` öğesini sunuyor; href'i eski
+`.pdf` kalıbı yerine `/pdf?version=...` ile bitebiliyor. Aynı kökenli fetch tam bir OA PDF'i
+döndürdü.
 
-An observed Cloudflare `Access Denied` occurred in a new/frequently used session. A public
-static resource on `mdpi-res.com` worked for tested journal/DOI formats:
+Yeni/sık kullanılan bir oturumda Cloudflare `Access Denied` gözlendi. Test edilen dergi/DOI
+biçimleri için `mdpi-res.com` üzerindeki herkese açık statik kaynak çalıştı:
 
 ```text
 https://mdpi-res.com/d_attachment/{journal}/{journal}-{volume:02d}-{article:05d}/article_deploy/{journal}-{volume:02d}-{article:05d}.pdf
 ```
 
-The current code recognizes the compact DOI pattern and includes explicit slug mappings for
-tested `antib` and `biom` prefixes. Treat static-URL construction for other journals as
-**inferred** and validate the DOI in the returned PDF. Do not assume every MDPI DOI encodes
-volume/article number identically.
+Mevcut kod kısa DOI kalıbını tanır ve test edilen `antib` ile `biom` önekleri için açık slug
+eşlemeleri içerir. Diğer dergiler için statik URL kurmayı **inferred** sayın ve dönen PDF'teki
+DOI'yi doğrulayın. Her MDPI DOI'sinin cilt/makale numarasını aynı biçimde kodladığını
+varsaymayın.
 
 ## Elsevier / ScienceDirect (`10.1016`, `sciencedirect.com`)
 
-**Verified platform behavior, 2026-08-05.** An authorized article page exposes a `View PDF`
-request resembling `.../pdfft?md5=...&pid=...-main.pdf`. It is session-bound and should be
-requested from the authenticated page context.
+**Verified platform behavior, 2026-08-05.** Yetkili bir makale sayfası
+`.../pdfft?md5=...&pid=...-main.pdf` benzeri bir `View PDF` isteği sunar. Oturuma bağlıdır ve
+kimliği doğrulanmış sayfa bağlamından istenmelidir.
 
-Observed restrictions:
+Gözlenen kısıtlar:
 
-- `/user/institution/login` can present Cloudflare Turnstile.
-- In some automated sessions the visible challenge widget did not render correctly.
-- After institution login, reload or navigate back to the article before reading access
-  metadata or clicking PDF.
+- `/user/institution/login` Cloudflare Turnstile gösterebilir.
+- Bazı otomatik oturumlarda görünür doğrulama bileşeni düzgün işlenmedi.
+- Kurum girişinden sonra erişim metadata'sını okumadan ya da PDF'e tıklamadan önce makaleyi
+  yeniden yükleyin ya da ona geri dönün.
 
-At Turnstile, pause for the user in the visible dedicated browser. WebVPN can fail on strict
-Cloudflare sites because the gateway's network/TLS fingerprint differs; institution login
-in the direct browser is the preferred fallback.
+Turnstile'da görünür özel tarayıcıda kullanıcıyı bekleyin. WebVPN, ağ geçidinin ağ/TLS parmak
+izi farklı olduğu için katı Cloudflare sitelerinde başarısız olabilir; doğrudan tarayıcıda
+kurum girişi tercih edilen yedek yoldur.
 
 ## Taylor & Francis (`10.1080`, `tandfonline.com`)
 
-**Verified WAYF behavior and observed restriction, 2026-08-05.** The platform required this
-institution flow even when campus affiliation was visible:
+**Verified WAYF behavior and observed restriction, 2026-08-05.** Platform, kampüs bağlantısı
+görünür olsa bile şu kurum akışını gerektirdi:
 
-1. Click `Access through your institution` / the Shibboleth `ssostart` action.
-2. On the WAYF page, first select the CARSI/CERNET federation in
-   `select#shib-search--fed`.
-3. Search only `jilin`, then choose Jilin University.
-4. Complete JLU authentication; the tool may fill/submit credentials only on an allowlisted
-   HTTPS JLU IdP.
-5. Manually review and decide the declaration/terms page. On the attribute-release page,
-   scroll/read enough page text to locate `接受` near the
-   lower part of the page. A 400-character body sample missed it; 2000+ characters worked.
+1. `Access through your institution` / Shibboleth `ssostart` işlemine tıklayın.
+2. WAYF sayfasında önce `select#shib-search--fed` içinde CARSI/CERNET federasyonunu seçin.
+3. Yalnız `jilin` arayın, sonra Jilin University'yi seçin.
+4. JLU kimlik doğrulamasını tamamlayın; araç kimlik bilgilerini yalnız izin listesindeki bir
+   HTTPS JLU IdP'sinde doldurabilir/gönderebilir.
+5. Beyan/koşullar sayfasını elle inceleyip karar verin. Öznitelik paylaşımı sayfasında
+   sayfanın alt kısmındaki `接受` ("Kabul et") düğmesini bulacak kadar kaydırın/metni okuyun.
+   400 karakterlik gövde örneği onu kaçırdı; 2000+ karakter işe yaradı.
 
-For DOI `10.1080/17460441.2025.2599178`, the authenticated item exposed HTML but not an
-institution-entitled PDF. `dc.Format` reported `text/HTML`, and the page offered a
-`$104 / 48 hours` purchase. This is an **item-specific observed restriction**, not proof that
-all T&F papers are HTML-only. Stop on an explicit purchase-only state.
+DOI `10.1080/17460441.2025.2599178` için kimliği doğrulanmış öğe HTML sundu ama kurum
+yetkisiyle bir PDF sunmadı. `dc.Format` `text/HTML` bildirdi ve sayfa `$104 / 48 hours` satın
+alma teklif etti. Bu **öğeye özgü gözlenen bir kısıttır**; tüm T&F makalelerinin yalnız HTML
+olduğunun kanıtı değildir. Açık bir yalnız satın alma durumunda durun.
 
 ## Oxford University Press (`10.1093`, `academic.oup.com`)
 
-**Verified, 2026-08-05.** Article-page navigation followed by the PDF action and an
-authorized same-origin/CDN request produced a complete PDF. OUP uses Silverchair
-infrastructure; the final PDF can be on a CDN, so capture the link from the page instead of
-constructing a permanent CDN URL.
+**Verified, 2026-08-05.** Makale sayfasında gezinip ardından PDF işlemi ve yetkili aynı
+kökenli/CDN isteği tam bir PDF üretti. OUP Silverchair altyapısını kullanır; son PDF bir
+CDN'de olabilir, bu yüzden kalıcı bir CDN URL'i kurmak yerine bağlantıyı sayfadan yakalayın.
 
 ## Springer Nature (`10.1007`, `link.springer.com`)
 
-**Mixed.** Standard OA or entitled articles can use `/content/pdf/{doi}.pdf` and must still
-pass validation. A tested *Methods in Molecular Biology* protocol chapter displayed
-`Buy Protocol` and did not provide an authorized PDF. Content type matters: stop when the
-specific chapter is purchase-only instead of repeatedly retrying the generic endpoint.
+**Mixed (karışık).** Standart OA ya da yetkili makaleler `/content/pdf/{doi}.pdf`
+kullanabilir ve yine de doğrulamadan geçmelidir. Test edilen bir *Methods in Molecular
+Biology* protokol bölümü `Buy Protocol` gösterdi ve yetkili bir PDF sunmadı. İçerik türü
+önemlidir: belirli bölüm yalnız satın alınabiliyorsa genel uç noktayı tekrar tekrar denemek
+yerine durun.
 
 ## Frontiers (`10.3389`)
 
-**Verified OA behavior, 2026-08-05.** Direct OA retrieval worked. Continue to use OA metadata
-and full PDF validation because landing URLs and CDN paths may change.
+**Verified OA behavior, 2026-08-05.** Doğrudan OA edinme çalıştı. Açılış URL'leri ve CDN
+yolları değişebileceği için OA metadata'sını ve tam PDF doğrulamasını kullanmaya devam edin.
 
 ## CNKI (`cnki.net`, `bar.cnki.net`)
 
-**Verified search; human checkpoint for download, 2026-08-05.** Search worked after hidden
-challenge DOM was ignored. PDF/CAJ download triggered a `bar.cnki.net` slider. Direct fetch
-without completing the visible challenge returned `来源应用不正确(01)`.
+**Verified search; human checkpoint for download, 2026-08-05.** Gizli doğrulama DOM'u yok
+sayıldıktan sonra arama çalıştı. PDF/CAJ indirme bir `bar.cnki.net` kaydırıcısını tetikledi.
+Görünür doğrulama tamamlanmadan yapılan doğrudan fetch `来源应用不正确(01)` ("kaynak uygulama
+hatalı (01)") döndürdü.
 
-Required response:
+Gereken yanıt:
 
-1. Keep the dedicated browser visible.
-2. Ask the user to complete the slider.
-3. Reuse that browser session.
-4. Detect whether the actual deliverable is PDF or CAJ.
+1. Özel tarayıcıyı görünür tutun.
+2. Kullanıcıdan kaydırıcıyı tamamlamasını isteyin.
+3. O tarayıcı oturumunu yeniden kullanın.
+4. Asıl teslimatın PDF mi CAJ mı olduğunu algılayın.
 
-Never save CAJ bytes with a `.pdf` extension. The current LitLib verified pipeline only
-accepts PDF; CAJ conversion/reading is outside this implementation.
+CAJ baytlarını asla `.pdf` uzantısıyla kaydetmeyin. Mevcut LitLib doğrulama hattı yalnız PDF
+kabul eder; CAJ dönüştürme/okuma bu uygulamanın kapsamı dışındadır.
 
-Campus access was tested. `litlib cnki login-carsi` exists, but off-campus CNKI CARSI remained
-**unverified** in this project session.
+Kampüs erişimi test edildi. `litlib cnki login-carsi` var, ama kampüs dışı CNKI CARSI bu proje
+oturumunda **unverified** kaldı.
 
 ## ACS (`10.1021`, `pubs.acs.org`)
 
-**Observed restriction, 2026-08-05.** The JLU CARSI path returned an identity-provider page
-stating that the web login service did not support the request. This indicates a service
-provider/federation configuration problem, not a CAPTCHA to bypass. Stop that CARSI route.
-Campus-IP or a legitimate WebVPN route may be tested separately when available.
+**Observed restriction, 2026-08-05.** JLU CARSI yolu, web giriş servisinin isteği
+desteklemediğini söyleyen bir kimlik sağlayıcı sayfası döndürdü. Bu, aşılacak bir CAPTCHA değil,
+bir servis sağlayıcı/federasyon yapılandırma sorunudur. O CARSI rotasını durdurun. Kampüs
+IP'si ya da meşru bir WebVPN rotası varsa ayrıca test edilebilir.
 
 ## Royal Society of Chemistry (`10.1039`, `pubs.rsc.org`)
 
-**Observed restriction, 2026-08-05.** The dedicated browser profile repeatedly received
-`429 Too Many Requests`. The project did not attempt evasion because the source was low
-priority. Mark `RATE_LIMITED`, close unnecessary tabs, wait for cooldown, and retest a
-single DOI later.
+**Observed restriction, 2026-08-05.** Özel tarayıcı profili tekrar tekrar
+`429 Too Many Requests` aldı. Kaynak düşük öncelikli olduğu için proje atlatmaya çalışmadı.
+`RATE_LIMITED` işaretleyin, gereksiz sekmeleri kapatın, soğumayı bekleyin ve daha sonra tek
+bir DOI ile yeniden test edin.
 
-## Generic Institution Pages
+## Genel kurum sayfaları
 
-The JLU route encountered several post-login states. LitLib detects these pages but does not
-accept legal terms or persistent attribute sharing on the user's behalf:
+JLU rotası girişten sonra birkaç durumla karşılaştı. LitLib bu sayfaları algılar ama kullanıcı
+adına hukuki koşulları ya da kalıcı öznitelik paylaşımını kabul etmez:
 
-- Terms/declaration page requiring explicit agreement.
-- Attribute-release/information-publication page requiring `接受`.
-- Elsevier personalization page such as `we now know you're from...`.
-- Remembered publisher sessions that redirect back without showing the credential form.
+- Açık onay gerektiren koşullar/beyan sayfası.
+- `接受` ("Kabul et") gerektiren öznitelik paylaşımı/bilgi yayımlama sayfası.
+- `we now know you're from...` gibi Elsevier kişiselleştirme sayfası.
+- Kimlik bilgisi formunu göstermeden geri yönlendiren, hatırlanmış yayıncı oturumları.
 
-Detect these by both URL and sufficiently long visible body text. Do not assume that absence
-of username/password fields means failure; first determine whether the session has already
-advanced to a post-login or publisher page.
+Bunları hem URL hem de yeterince uzun görünür gövde metniyle algılayın. Kullanıcı adı/parola
+alanlarının olmamasını başarısızlık saymayın; önce oturumun zaten giriş sonrası bir sayfaya ya
+da yayıncı sayfasına geçip geçmediğini belirleyin.
 
 ## WebVPN
 
-JLU WebVPN rewrites a target as roughly:
+JLU WebVPN bir hedefi kabaca şöyle yeniden yazar:
 
 ```text
 https://vpn.jlu.edu.cn/https/{publisher-host-token}/{path}
 ```
 
-The host token and VPN cookies are session material. Never publish or log them. A token must
-be learned from the user's authorized portal session and can become stale. Missing token or
-ticket should skip the WebVPN route and continue to institution login where appropriate.
+Host token'ı ve VPN çerezleri oturum bilgisidir. Onları asla yayımlamayın ya da günlüğe
+yazmayın. Token, kullanıcının yetkili portal oturumundan öğrenilmelidir ve bayatlayabilir.
+Eksik token ya da bilet WebVPN rotasını atlatmalı ve uygun olduğunda kurum girişiyle devam
+edilmelidir.
 
-WebVPN is not universally superior: strict anti-bot/CDN platforms may reject the gateway.
-Use it as one route, not a global proxy for all publishers.
+WebVPN her yerde daha iyi değildir: katı anti-bot/CDN platformları ağ geçidini reddedebilir.
+Onu tüm yayıncılar için global bir proxy olarak değil, rotalardan biri olarak kullanın.

@@ -1,4 +1,4 @@
-"""Zotero Local API 只读访问（http://127.0.0.1:23119/api/）。"""
+"""Zotero Local API'ye salt-okur erişim（http://127.0.0.1:23119/api/）。"""
 
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ class ZoteroReadOnly:
     def _get(self, path: str, params: dict | None = None) -> dict | list:
         resp = self._client.get(f"{ZOTERO_API}{path}", params=params)
         if resp.status_code == 404:
-            raise ZoteroError(f"Zotero 无记录: {path}")
+            raise ZoteroError(f"Zotero'da kayıt yok: {path}")
         resp.raise_for_status()
         return resp.json()
 
@@ -41,7 +41,7 @@ class ZoteroReadOnly:
         return self._get("/users/0/items", {"q": query, "qmode": "everything", "limit": limit})
 
     def find_exact_items(self, work: Work, limit: int = 20) -> list[dict]:
-        """Find non-attachment items by exact DOI, or exact normalized title as fallback."""
+        """Ek olmayan öğeleri tam DOI ile, bulunamazsa tam normalleştirilmiş başlıkla bulur."""
         query = work.doi or work.title or ""
         if not query:
             return []
@@ -78,10 +78,10 @@ class ZoteroReadOnly:
         return self._get(f"/users/0/items/{key}/children", {"limit": 100})
 
     def attachment_abs_path(self, attachment: dict) -> Path | None:
-        """附件 item → 本地绝对路径。
+        """Ek öğesi → yerel mutlak yol.
 
-        Zotero 9 Local API 的路径在 links.enclosure（file:/// 链接），
-        data.path 可能为 None。兼容 storage: 前缀与 storage 目录推测。
+        Zotero 9 Local API'de yol links.enclosure içindedir (file:/// bağlantısı),
+        data.path None olabilir. storage: önekiyle ve storage dizini tahminiyle uyumludur.
         """
         enclosure = (attachment.get("links") or {}).get("enclosure") or {}
         href = enclosure.get("href", "")
@@ -116,7 +116,7 @@ class ZoteroReadOnly:
         return None
 
     def resolve_pdf(self, item: dict) -> dict | None:
-        """给定文献 item，找到第一个 PDF 附件，返回 {key, path}。"""
+        """Verilen literatür öğesinin ilk PDF ekini bulur, {key, path} döndürür."""
         if item.get("data", {}).get("itemType") == "attachment":
             p = self.attachment_abs_path(item)
             return {"key": item.get("key"), "path": p} if p else None

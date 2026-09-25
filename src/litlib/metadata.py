@@ -1,4 +1,4 @@
-"""元数据解析：Crossref / PubMed / OpenAlex，归一化为 Work。"""
+"""Metadata çözümleme: Crossref / PubMed / OpenAlex, Work'e normalleştirilir."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ HEADERS = {
 
 
 def _author_parts(name: str) -> tuple[str | None, str | None]:
-    """Split common `Family, Given`, `Given Family`, and PubMed `Family Initials` forms."""
+    """Yaygın `Soyadı, Ad`, `Ad Soyadı` ve PubMed `Soyadı Baş harfler` biçimlerini ayırır."""
     name = " ".join(name.split())
     if not name:
         return None, None
@@ -195,7 +195,7 @@ async def resolve_by_doi(client: httpx.AsyncClient, doi: str) -> Work:
         data = None
     if data:
         return _openalex_to_work(data)
-    raise ValueError(f"Crossref/DataCite/OpenAlex 均无记录: {doi}")
+    raise ValueError(f"Crossref/DataCite/OpenAlex hiçbirinde kayıt yok: {doi}")
 
 
 async def resolve_by_arxiv(client: httpx.AsyncClient, arxiv: str) -> Work:
@@ -207,7 +207,7 @@ async def resolve_by_arxiv(client: httpx.AsyncClient, arxiv: str) -> Work:
           "arxiv": "http://arxiv.org/schemas/atom"}
     entry = root.find("atom:entry", ns)
     if entry is None:
-        raise ValueError(f"arXiv 无记录: {arxiv}")
+        raise ValueError(f"arXiv kaydı yok: {arxiv}")
     w = Work(arxiv=arxiv)
     title = entry.findtext("atom:title", default="", namespaces=ns)
     w.title = " ".join(title.split()) or None
@@ -231,11 +231,11 @@ async def resolve_by_pmid(client: httpx.AsyncClient, pmid: str) -> Work:
     url = (f"{EUTILS_BASE}/esummary.fcgi?db=pubmed&id={pmid}&retmode=json&tool=litlib&email={CONTACT_EMAIL}")
     data = await _get(client, url)
     if not data:
-        raise ValueError(f"PubMed 无记录: {pmid}")
+        raise ValueError(f"PubMed kaydı yok: {pmid}")
     docs = data.get("result", {})
     uid = docs.get("uids", [None])[0]
     if not uid:
-        raise ValueError(f"PubMed 无记录: {pmid}")
+        raise ValueError(f"PubMed kaydı yok: {pmid}")
     return _pubmed_to_work(docs[uid])
 
 
@@ -243,10 +243,10 @@ async def resolve_by_pmcid(client: httpx.AsyncClient, pmcid: str) -> Work:
     url = f"{EUROPE_PMC_BASE}/search?query=PMCID%3A{pmcid}&format=json"
     data = await _get(client, url)
     if not data:
-        raise ValueError(f"Europe PMC 无记录: {pmcid}")
+        raise ValueError(f"Europe PMC kaydı yok: {pmcid}")
     results = data.get("resultList", {}).get("result", [])
     if not results:
-        raise ValueError(f"Europe PMC 无记录: {pmcid}")
+        raise ValueError(f"Europe PMC kaydı yok: {pmcid}")
     r = results[0]
     w = Work()
     w.pmcid = r.get("pmcid")
@@ -278,7 +278,7 @@ async def resolve_by_title_search(client: httpx.AsyncClient, work: Work) -> Work
 
 
 async def fetch_metadata(client: httpx.AsyncClient, work: Work) -> Work:
-    """按优先级解析元数据并合并；无结果返回空 Work。"""
+    """Metadata'yı öncelik sırasıyla çözümler ve birleştirir; sonuç yoksa boş Work döndürür."""
     result = Work()
     if work.doi:
         try:

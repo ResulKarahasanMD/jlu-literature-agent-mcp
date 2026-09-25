@@ -1,13 +1,13 @@
-"""机构通道阶段：当前网络直连 → 可选 WebVPN → 机构登录 → 校验。
+"""Kurum kanalı aşaması: geçerli ağdan doğrudan bağlantı → isteğe bağlı WebVPN → kurum girişi → doğrulama.
 
-工作流：
-  1. litlib inst open          启动专用 Chrome
-  2. litlib run --stage inst   校内/校外按任务独立降级
-  3. 如需 WebVPN，使用 inst open --vpn 与 inst register-token
+İş akışı:
+  1. litlib inst open          özel Chrome'u başlatır
+  2. litlib run --stage inst   kampüs içi/dışı; her görev için ayrı ayrı geri düşer
+  3. WebVPN gerekirse inst open --vpn ve inst register-token kullanılır
 
-网瑞达 wengine 网关改写格式：
+Wangruida wengine ağ geçidinin yeniden yazma biçimi:
   https://vpn.jlu.edu.cn/https/{host_token}/{path}
-  token 需从门户资源点击中提取（用户点一次即可登记到 token 缓存）。
+  token portaldaki kaynak tıklamasından çıkarılır (kullanıcının bir kez tıklaması token önbelleğine kaydetmeye yeter).
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def save_tokens(tokens: dict[str, str]) -> None:
 
 
 def gateway_url(tokens: dict[str, str], domain: str, path: str) -> str | None:
-    """构造网关改写 URL；path 不含域名。"""
+    """Ağ geçidinin yeniden yazdığı URL'i kurar; path alan adı içermez."""
     token = tokens.get(domain)
     if not token:
         return None
@@ -69,7 +69,7 @@ def gateway_url(tokens: dict[str, str], domain: str, path: str) -> str | None:
 
 
 def extract_gateway_token(url: str) -> str:
-    """从 WebVPN 改写 URL 提取 host token。"""
+    """WebVPN'in yeniden yazdığı URL'den host token'ını çıkarır."""
     parsed = urlparse(url)
     if parsed.hostname != "vpn.jlu.edu.cn":
         return ""
@@ -80,7 +80,7 @@ def extract_gateway_token(url: str) -> str:
 
 
 def cmd_register_token(domain: str) -> int:
-    """从当前浏览器 WebVPN 标签页登记一个 publisher token。"""
+    """Geçerli tarayıcıdaki WebVPN sekmesinden bir yayıncı token'ı kaydeder."""
     async def _register() -> str:
         await chrome_cdp.wait_for_cdp(timeout=10)
         async with httpx.AsyncClient(timeout=15) as client:
@@ -94,18 +94,18 @@ def cmd_register_token(domain: str) -> int:
 
     token = asyncio.run(_register())
     if not token:
-        print("未找到 WebVPN 改写标签页。请先从 WebVPN 门户打开目标站点。")
+        print("WebVPN ile yeniden yazılmış sekme bulunamadı. Önce hedef siteyi WebVPN portalından açın.")
         return 1
     key = domain.lower().removeprefix("www.")
     tokens = load_tokens()
     tokens[key] = token
     save_tokens(tokens)
-    print(f"已登记 {key}: <redacted>（长度 {len(token)}）")
+    print(f"kaydedildi {key}: <redacted> (uzunluk {len(token)})")
     return 0
 
 
 def doi_to_publisher(doi: str) -> tuple[str, str] | None:
-    """DOI → (publisher 域名, 文章路径)。仅支持已知出版社格式。"""
+    """DOI → (yayıncı alan adı, makale yolu). Yalnız bilinen yayıncı biçimleri desteklenir."""
     doi = doi.lower().strip()
     if doi.startswith("10.1038/"):
         return "nature.com", f"articles/{doi[len('10.1038/'):]}.pdf"
@@ -139,7 +139,7 @@ def doi_to_publisher(doi: str) -> tuple[str, str] | None:
 
 
 def _record_inst_experience(domain: str, inst_channel: str, doi: str) -> None:
-    """机构阶段成功下载后自动记录个人经验（本地 learn 库，不影响 canonical）。"""
+    """Kurum aşamasında başarılı indirmeden sonra kişisel deneyimi otomatik kaydeder (yerel learn kütüphanesi, kanonik olanı etkilemez)."""
     if not domain:
         return
     try:
@@ -157,8 +157,8 @@ def _record_inst_experience(domain: str, inst_channel: str, doi: str) -> None:
 
 
 def cmd_open(url: str = "about:blank") -> int:
-    """启动专用 Chrome；按需打开 WebVPN 或其他站点。"""
-    print("启动专用 Chrome（CDP 127.0.0.1:9222）...")
+    """Özel Chrome'u başlatır; gerekirse WebVPN'i ya da başka bir siteyi açar."""
+    print("Özel Chrome başlatılıyor (CDP 127.0.0.1:9222)...")
     session = chrome_cdp.launch_chrome()
 
     async def _open_vpn() -> None:
@@ -174,37 +174,37 @@ def cmd_open(url: str = "about:blank") -> int:
     except Exception:
         session.close()
         raise
-    session.proc = None  # 后续由 `litlib inst close` 通过 CDP 关闭
+    session.proc = None  # sonra `litlib inst close` CDP üzerinden kapatır
     if "vpn.jlu.edu.cn" in url:
-        print("请在浏览器中手动登录 WebVPN；完成后即可运行机构阶段。")
+        print("Tarayıcıda WebVPN'e elle giriş yapın; bitince kurum aşaması çalıştırılabilir.")
     else:
-        print("专用浏览器已就绪。需要 WebVPN 时运行 `litlib inst open --vpn`。")
-    print("注意：本命令退出后 Chrome 会保持运行，批处理结束后才关闭。")
+        print("Özel tarayıcı hazır. WebVPN gerektiğinde `litlib inst open --vpn` çalıştırın.")
+    print("Not: bu komut bittikten sonra Chrome çalışmaya devam eder, ancak parti işlemi bitince kapatılır.")
     return 0
 
 
 def cmd_tokens() -> int:
-    """列出已登记网关 token。"""
+    """Kayıtlı ağ geçidi token'larını listeler."""
     tokens = load_tokens()
     if not tokens:
-        print("尚无 token。登录 WebVPN 后，在门户/数据库导航中点击目标站点一次即可登记。")
+        print("Henüz token yok. WebVPN'e girdikten sonra portal/veritabanı menüsünde hedef siteye bir kez tıklamak kaydetmeye yeter.")
         return 0
     for domain, token in tokens.items():
-        print(f"{domain}: <present>（长度 {len(token)}）")
+        print(f"{domain}: <present> (uzunluk {len(token)})")
     return 0
 
 
 async def get_vpn_cookies() -> dict[str, str]:
-    """从 CDP 连接的 Chrome 取 vpn.jlu.edu.cn 的 cookie（需已登录）。"""
+    """CDP ile bağlı Chrome'dan vpn.jlu.edu.cn çerezini alır (giriş yapılmış olmalı)."""
     try:
         await chrome_cdp.wait_for_cdp(timeout=10)
     except TimeoutError:
-        raise RuntimeError("CDP 无响应，请先 `litlib inst open` 启动浏览器") from None
+        raise RuntimeError("CDP yanıt vermiyor; önce `litlib inst open` ile tarayıcıyı başlatın") from None
     async with httpx.AsyncClient(timeout=15) as client:
         pages = (await client.get(f"http://{chrome_cdp.CDP_HOST}:{chrome_cdp.CDP_PORT}/json/list", timeout=10)).json()
         page = next((p for p in pages if p.get("type") == "page"), None)
         if not page:
-            raise RuntimeError("无可用页面")
+            raise RuntimeError("kullanılabilir sayfa yok")
         tab = chrome_cdp.Tab(page["webSocketDebuggerUrl"])
         await tab.connect()
         try:
@@ -222,7 +222,7 @@ def _ticket_valid(cookies: dict[str, str]) -> bool:
 async def download_via_gateway(
     client: httpx.AsyncClient, cookies: dict[str, str], url: str, dest: Path
 ) -> dict:
-    """httpx 直连网关 URL 下载 PDF，返回元数据；失败抛异常。"""
+    """httpx ile ağ geçidi URL'inden doğrudan PDF indirir, metadata döndürür; başarısızlıkta istisna fırlatır."""
     headers = {"User-Agent": UA, "Accept": "application/pdf,*/*"}
     tmp = dest.with_suffix(".part")
     tmp.unlink(missing_ok=True)
@@ -239,7 +239,7 @@ async def download_via_gateway(
         with tmp.open("rb") as f:
             magic = f.read(4)
         if magic != b"%PDF":
-            raise PDFError(f"非 PDF（content-type={ctype}, size={size}）")
+            raise PDFError(f"PDF değil (content-type={ctype}, size={size})")
         os.replace(tmp, dest)
         return {"size": size, "content_type": ctype}
     except BaseException:
@@ -250,14 +250,14 @@ async def download_via_gateway(
 async def download_via_browser(
     tokens: dict[str, str], domain: str, path: str, dest: Path
 ) -> dict:
-    """CDP 浏览器 fetch 网关 URL（Cloudflare 等站点 httpx 直连 403 时回退）。"""
+    """Ağ geçidi URL'ini CDP tarayıcısında fetch eder (Cloudflare gibi sitelerde httpx doğrudan 403 alınca yedek yol)."""
     base = gateway_url(tokens, domain, "")
     if not base:
-        raise PDFError(f"缺少 {domain} 网关 token")
+        raise PDFError(f"{domain} için ağ geçidi token'ı yok")
     target = gateway_url(tokens, domain, path)
     ws = await chrome_cdp.create_tab_navigate(base, timeout=30)
     if not ws:
-        raise PDFError("无法创建浏览器网关标签页")
+        raise PDFError("tarayıcıda ağ geçidi sekmesi oluşturulamadı")
     tab = chrome_cdp.Tab(ws)
     await tab.connect()
     try:
@@ -271,18 +271,18 @@ async def download_via_browser(
 async def run_inst(st: State, limit: int = BATCH_LIMIT,
                    access_mode: str = "auto") -> dict:
     if access_mode not in {"auto", "campus", "offcampus"}:
-        raise ValueError(f"未知 access_mode: {access_mode}")
+        raise ValueError(f"bilinmeyen access_mode: {access_mode}")
     limit = min(max(1, limit), BATCH_LIMIT)
     tasks = st.list_tasks(state=TaskState.REQUIRES_INST, limit=limit)
     stats = {"processed": 0, "ok": 0, "failed": 0, "paused": 0, "paywalled": 0}
     if not tasks:
-        print("无 REQUIRES_INST 任务")
+        print("REQUIRES_INST durumunda görev yok")
         return stats
-    print(f"本批 {len(tasks)} 篇（并发 1，间隔 8–15s）")
+    print(f"bu partide {len(tasks)} makale (eşzamanlılık 1, aralık 8–15 sn)")
     tokens = load_tokens()
-    print(f"已登记 token: {list(tokens.keys()) or '无'}")
+    print(f"kayıtlı token: {list(tokens.keys()) or 'yok'}")
     cookies: dict[str, str] | None = None
-    # BVU (GlobalProtect VPN) only uses the direct routes; JLU gateway/IdP login are skipped.
+    # BVU (GlobalProtect VPN) yalnız doğrudan rotaları kullanır; JLU ağ geçidi/IdP girişi atlanır.
     jlu_routes = not bvu.is_active()
     async with httpx.AsyncClient(timeout=120) as client:
         if not jlu_routes:
@@ -298,9 +298,9 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
             work = st.get_work(t["work_id"])
             stats["processed"] += 1
             if not work or not work.doi:
-                st.set_state(t["id"], TaskState.REQUIRES_INST, error="机构渠道需要 DOI")
+                st.set_state(t["id"], TaskState.REQUIRES_INST, error="kurum kanalı DOI gerektirir")
                 stats["paused"] += 1
-                print(f"[task {t['id']}] 无 DOI，需人工处理")
+                print(f"[task {t['id']}] DOI yok, elle işlem gerekli")
                 continue
             dest = paths.staging_downloads / f"{work.work_id}.pdf"
             if dest.exists():
@@ -321,22 +321,22 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     )
                     st.set_state(t["id"], TaskState.READY)
                     stats["ok"] += 1
-                    print(f"[task {t['id']}] 恢复既有 PDF: {n_pages} 页 / {n_chars} 字符")
+                    print(f"[task {t['id']}] mevcut PDF geri kazanıldı: {n_pages} sayfa / {n_chars} karakter")
                 except Exception as exc:
                     st.set_state(
                         t["id"], TaskState.REQUIRES_INST,
                         error=f"HUMAN_REQUIRED: existing output requires review: {exc}",
                     )
                     stats["paused"] += 1
-                    print(f"[task {t['id']}] 目标 PDF 已存在且未通过恢复校验，未覆盖")
+                    print(f"[task {t['id']}] hedef PDF zaten var ve geri kazanım doğrulamasından geçmedi, üzerine yazılmadı")
                 continue
             if not st.begin_attempt(t["id"]):
                 stats["paused"] += 1
-                print(f"[task {t['id']}] 已达到最大尝试次数，跳过")
+                print(f"[task {t['id']}] azami deneme sayısına ulaşıldı, atlandı")
                 continue
             mapped = doi_to_publisher(work.doi)
             domain, path = mapped or ("", "")
-            print(f"[task {t['id']}] {work.doi} -> {domain or 'DOI 实际落地站'}")
+            print(f"[task {t['id']}] {work.doi} -> {domain or 'DOI yönlendirmesinin gerçek hedefi'}")
             errors: list[str] = []
             rate_limited = False
             paywalled_route = False
@@ -362,7 +362,7 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                         route_id, "SUCCEEDED", size_bytes=int(result.get("size", 0) or 0))
                     return result
 
-                # 快速路线：已知 PDF URL 先走普通流式下载，校内 IP 下通常直接命中。
+                # Hızlı rota: bilinen PDF URL'i önce normal akışlı indirmeyle denenir; kampüs IP'sinde genellikle doğrudan tutar.
                 info = None
                 if domain and path:
                     direct_url = f"https://{domain}/{path}"
@@ -377,13 +377,13 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     except Exception as e:
                         errors.append(f"direct-httpx: {e}")
                         rate_limited = bool(re.search(
-                            r"\b429\b|too many requests|站点限流", str(e), re.I))
-                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙", str(e), re.I))
+                            r"\b429\b|too many requests|站点限流|hız sınırı", str(e), re.I))
+                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙|ödeme duvarı", str(e), re.I))
                         human_checkpoint = bool(re.search(
-                            r"HUMAN[_ -]?REQUIRED|人机验证|captcha|turnstile", str(e), re.I))
+                            r"HUMAN[_ -]?REQUIRED|人机验证|insan doğrulaması|captcha|turnstile", str(e), re.I))
                         dest.unlink(missing_ok=True)
 
-                # 通用路线：当前网络/浏览器会话直连。校内 IP 与已登录会话都在此命中。
+                # Genel rota: geçerli ağ/tarayıcı oturumundan doğrudan bağlantı. Kampüs IP'si de oturum açılmış oturum da burada tutar.
                 if info is None and not rate_limited and not paywalled_route and not human_checkpoint:
                     inst_channel = "direct-browser"
                     try:
@@ -398,10 +398,10 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     except Exception as e:
                         errors.append(f"direct-browser: {e}")
                         rate_limited = bool(re.search(
-                            r"429|too many requests|站点限流", str(e), re.I))
-                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙", str(e), re.I))
+                            r"429|too many requests|站点限流|hız sınırı", str(e), re.I))
+                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙|ödeme duvarı", str(e), re.I))
                         human_checkpoint = bool(re.search(
-                            r"HUMAN[_ -]?REQUIRED|人机验证|captcha|turnstile", str(e), re.I))
+                            r"HUMAN[_ -]?REQUIRED|人机验证|insan doğrulaması|captcha|turnstile", str(e), re.I))
                         dest.unlink(missing_ok=True)
                         info = None
 
@@ -430,10 +430,10 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     except Exception as e:
                         errors.append(f"gateway-httpx: {e}")
                         rate_limited = bool(re.search(
-                            r"\b429\b|too many requests|站点限流", str(e), re.I))
-                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙", str(e), re.I))
+                            r"\b429\b|too many requests|站点限流|hız sınırı", str(e), re.I))
+                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙|ödeme duvarı", str(e), re.I))
                         human_checkpoint = bool(re.search(
-                            r"HUMAN[_ -]?REQUIRED|人机验证|captcha|turnstile", str(e), re.I))
+                            r"HUMAN[_ -]?REQUIRED|人机验证|insan doğrulaması|captcha|turnstile", str(e), re.I))
                         dest.unlink(missing_ok=True)
                         if rate_limited or paywalled_route or human_checkpoint:
                             return None
@@ -451,10 +451,10 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     except Exception as e:
                         errors.append(f"gateway-browser: {e}")
                         rate_limited = bool(re.search(
-                            r"\b429\b|too many requests|站点限流", str(e), re.I))
-                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙", str(e), re.I))
+                            r"\b429\b|too many requests|站点限流|hız sınırı", str(e), re.I))
+                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙|ödeme duvarı", str(e), re.I))
                         human_checkpoint = bool(re.search(
-                            r"HUMAN[_ -]?REQUIRED|人机验证|captcha|turnstile", str(e), re.I))
+                            r"HUMAN[_ -]?REQUIRED|人机验证|insan doğrulaması|captcha|turnstile", str(e), re.I))
                         dest.unlink(missing_ok=True)
                         return None
 
@@ -476,14 +476,14 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     except Exception as e:
                         errors.append(f"institution-login: {e}")
                         rate_limited = bool(re.search(
-                            r"\b429\b|too many requests|站点限流", str(e), re.I))
-                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙", str(e), re.I))
+                            r"\b429\b|too many requests|站点限流|hız sınırı", str(e), re.I))
+                        paywalled_route = bool(re.search(r"PAYWALLED|需购买|付费墙|ödeme duvarı", str(e), re.I))
                         human_checkpoint = bool(re.search(
-                            r"HUMAN[_ -]?REQUIRED|人机验证|captcha|turnstile", str(e), re.I))
+                            r"HUMAN[_ -]?REQUIRED|人机验证|insan doğrulaması|captcha|turnstile", str(e), re.I))
                         dest.unlink(missing_ok=True)
                         return None
 
-                # 可选路线：已有 WebVPN ticket + 当前 publisher token 时才尝试，不再阻断后续登录。
+                # İsteğe bağlı rota: yalnız WebVPN bileti + geçerli yayıncı token'ı varsa denenir; sonraki girişi artık engellemez.
                 url = gateway_url(tokens, domain, path) if domain and path else None
                 if (info is None and jlu_routes and access_mode == "offcampus"
                         and not rate_limited and not paywalled_route and not human_checkpoint):
@@ -496,12 +496,12 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     info = await try_login()
                 if info is None:
                     if paywalled_route:
-                        raise PDFError("PAYWALLED: publisher 明确无授权 PDF")
+                        raise PDFError("PAYWALLED: yayıncı açıkça yetkili PDF sunmuyor (ödeme duvarı)")
                     if human_checkpoint:
-                        raise PDFError("HUMAN_REQUIRED: 等待用户完成可见验证/同意页面")
+                        raise PDFError("HUMAN_REQUIRED: kullanıcının görünür doğrulama/onay sayfasını tamamlaması bekleniyor")
                     if rate_limited:
-                        raise PDFError("RATE_LIMITED: publisher 当前限制专用浏览器访问")
-                    raise PDFError("所有机构访问路线均失败")
+                        raise PDFError("RATE_LIMITED: yayıncı şu an özel tarayıcının erişimini sınırlıyor (hız sınırı)")
+                    raise PDFError("tüm kurum erişim rotaları başarısız")
 
                 st.set_state(t["id"], TaskState.VERIFYING)
                 n_pages, n_chars = validate_pdf_for_work(dest, work.doi)
@@ -516,7 +516,7 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                 st.add_file(work.work_id, str(dest), sha, dest.stat().st_size, inst_channel)
                 st.set_state(t["id"], TaskState.READY)
                 stats["ok"] += 1
-                print(f"  [OK] {n_pages} 页, {dest.stat().st_size / 1e6:.1f} MB")
+                print(f"  [OK] {n_pages} sayfa, {dest.stat().st_size / 1e6:.1f} MB")
                 _record_inst_experience(domain, inst_channel, work.doi)
             except Exception as e:
                 if not verified_output:
@@ -529,11 +529,11 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                 }
                 st.update_work(work)
                 human_required = bool(re.search(
-                    r"HUMAN[_ -]?REQUIRED|人机验证|captcha|turnstile", detail, re.I))
+                    r"HUMAN[_ -]?REQUIRED|人机验证|insan doğrulaması|captcha|turnstile", detail, re.I))
                 paywalled = bool(re.search(
-                    r"PAYWALLED|buy protocol|purchase-only|需购买|付费墙", detail, re.I))
+                    r"PAYWALLED|buy protocol|purchase-only|需购买|付费墙|ödeme duvarı", detail, re.I))
                 rate_limited = rate_limited or bool(re.search(
-                    r"RATE_LIMITED|\b429\b|too many requests|站点限流", detail, re.I))
+                    r"RATE_LIMITED|\b429\b|too many requests|站点限流|hız sınırı", detail, re.I))
                 code = (
                     "PAYWALLED" if paywalled else "HUMAN_REQUIRED" if human_required
                     else "RATE_LIMITED" if rate_limited else "DOWNLOAD_FAILED"
@@ -554,9 +554,9 @@ async def run_inst(st: State, limit: int = BATCH_LIMIT,
                     stats["failed"] += 1
                 print(f"  [x] {e}")
                 if human_required or rate_limited:
-                    print("  批次已暂停；完成人工 checkpoint 或等待冷却后再 recover --paused")
+                    print("  parti duraklatıldı; insan checkpoint'ini tamamlayın ya da soğuma süresini bekleyip recover --paused çalıştırın")
                     break
             delay = random.uniform(*DELAY)
-            print(f"  等待 {delay:.0f}s ...")
+            print(f"  {delay:.0f} sn bekleniyor ...")
             time.sleep(delay)
     return stats

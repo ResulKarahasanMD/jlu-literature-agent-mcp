@@ -1,6 +1,6 @@
-# 统一环境入口：为本项目进程设置 D 盘路径，不修改系统全局环境变量。
-# 用法: .\scripts\run.ps1 <command...>
-# 例:  .\scripts\run.ps1 uv run litlib doctor
+# Ortak ortam giriş noktası: bu projenin süreçleri için D sürücüsü yollarını ayarlar, sistem geneli ortam değişkenlerini değiştirmez.
+# Kullanım: .\scripts\run.ps1 <command...>
+# Örnek:  .\scripts\run.ps1 uv run litlib doctor
 
 $ErrorActionPreference = "Stop"
 
@@ -16,7 +16,7 @@ if ($env:LITLIB_RUNTIME_ROOT) {
 }
 $env:LITLIB_RUNTIME_ROOT = $RuntimeRoot
 
-# 创建运行时目录（如不存在）
+# Çalışma zamanı dizinlerini oluştur (yoksa)
 $rtDirs = @(
     "$RuntimeRoot\tmp",
     "$RuntimeRoot\cache",
@@ -30,7 +30,7 @@ foreach ($d in $rtDirs) {
     if (-not (Test-Path -LiteralPath $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
 }
 
-# 进程级环境变量（仅本次调用）
+# Süreç düzeyinde ortam değişkenleri (yalnız bu çağrı için)
 $env:TEMP = "$RuntimeRoot\tmp"
 $env:TMP = "$RuntimeRoot\tmp"
 $env:UV_CACHE_DIR = "$RuntimeRoot\cache\uv"
@@ -42,13 +42,13 @@ $env:NODE_COMPILE_CACHE = "$RuntimeRoot\cache\node"
 $env:npm_config_cache = "$RuntimeRoot\cache\npm"
 $env:PYTHONPYCACHEPREFIX = "$RuntimeRoot\cache\python"
 
-# 项目内 venv 优先
+# Proje içindeki venv önceliklidir
 $VenvPython = Join-Path $ProjectRoot ".venv\Scripts\python.exe"
 if (Test-Path -LiteralPath $VenvPython) {
     $env:PATH = "$(Split-Path $VenvPython);" + $env:PATH
 }
 
-# 执行剩余命令
+# Kalan komutu çalıştır
 if ($args.Count -gt 0) {
     if ($args.Count -eq 1) {
         & $args[0]

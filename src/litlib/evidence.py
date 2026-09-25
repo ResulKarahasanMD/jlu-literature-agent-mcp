@@ -1,7 +1,7 @@
-"""Evidence triage for enzyme-data extraction.
+"""Enzim verisi çıkarımı için kanıt ön değerlendirmesi.
 
-This module does not claim that a paper contains complete measurements. It reports
-where likely evidence was found and which target fields still need review.
+Bu modül bir makalenin eksiksiz ölçüm içerdiğini iddia etmez. Olası kanıtın nerede
+bulunduğunu ve hangi hedef alanların hâlâ incelenmesi gerektiğini raporlar.
 """
 
 from __future__ import annotations
@@ -39,10 +39,10 @@ def _page_excerpt(text: str, pattern: re.Pattern[str], limit: int = 240) -> str 
 
 
 def scan_pdf_evidence(path: Path | str, max_excerpt_per_field: int = 3) -> dict:
-    """Scan searchable PDF text and return a triage manifest.
+    """Aranabilir PDF metnini tarar ve bir ön değerlendirme manifesti döndürür.
 
-    The result is deliberately conservative: ``needs_figure_review`` means a likely
-    image/table evidence path exists, not that a VLM must be called.
+    Sonuç bilerek temkinlidir: ``needs_figure_review``, olası bir görsel/tablo kanıt
+    yolu olduğunu anlatır; bir VLM çağrılması gerektiğini değil.
     """
     pdf_path = Path(path)
     reader = PdfReader(str(pdf_path), strict=False)

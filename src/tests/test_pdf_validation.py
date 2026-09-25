@@ -17,7 +17,7 @@ def _pdf(path: Path, text: str) -> Path:
             y -= 16
         document.showPage()
     document.save()
-    # Ensure the work-level minimum-size guard does not dominate these identity tests.
+    # Work düzeyindeki asgari boyut korumasının bu kimlik testlerini bastırmamasını sağlar.
     with path.open("ab") as f:
         f.write(b" " * 5_000)
     return path
@@ -25,13 +25,13 @@ def _pdf(path: Path, text: str) -> Path:
 
 def test_rejects_supplementary_material(tmp_path: Path):
     path = _pdf(tmp_path / "supp.pdf", "Supplementary Materials for DOI 10.1000/right")
-    with pytest.raises(PDFError, match="补充材料"):
+    with pytest.raises(PDFError, match="ek materyal algılandı"):
         validate_pdf_for_work(path, "10.1000/right")
 
 
 def test_rejects_mismatched_doi(tmp_path: Path):
     path = _pdf(tmp_path / "wrong.pdf", "Research Article DOI: 10.1000/wrong")
-    with pytest.raises(PDFError, match="DOI 不匹配"):
+    with pytest.raises(PDFError, match="PDF DOI uyuşmuyor"):
         validate_pdf_for_work(path, "10.1000/right")
 
 
@@ -49,7 +49,7 @@ def test_accepts_doi_split_across_lines(tmp_path: Path):
 
 def test_rejects_pdf_without_expected_doi(tmp_path: Path):
     path = _pdf(tmp_path / "missing-doi.pdf", "Research article without an identifier")
-    with pytest.raises(PDFError, match="DOI 不匹配"):
+    with pytest.raises(PDFError, match="PDF DOI uyuşmuyor"):
         validate_pdf_for_work(path, "10.1000/right")
 
 
@@ -65,7 +65,7 @@ def test_rejects_wrong_article_that_cites_target_later(tmp_path: Path):
         tmp_path / "wrong-with-reference.pdf",
         "Research Article DOI: 10.1000/wrong\fReferences include DOI 10.1000/right",
     )
-    with pytest.raises(PDFError, match="首页检测到"):
+    with pytest.raises(PDFError, match="ilk sayfada algılanan"):
         validate_pdf_for_work(path, "10.1000/right")
 
 
@@ -74,7 +74,7 @@ def test_rejects_competing_doi_even_when_target_is_on_first_page(tmp_path: Path)
         tmp_path / "two-dois.pdf",
         "Research Article DOI: 10.1000/wrong\nRelated DOI: 10.1000/right",
     )
-    with pytest.raises(PDFError, match="首页检测到"):
+    with pytest.raises(PDFError, match="ilk sayfada algılanan"):
         validate_pdf_for_work(path, "10.1000/right")
 
 
@@ -84,5 +84,5 @@ def test_rejects_supplement_label_later_on_first_pages(tmp_path: Path):
         tmp_path / "late-supplement.pdf",
         f"{padding}Supplementary Information\nDOI 10.1000/right",
     )
-    with pytest.raises(PDFError, match="补充材料"):
+    with pytest.raises(PDFError, match="ek materyal algılandı"):
         validate_pdf_for_work(path, "10.1000/right")

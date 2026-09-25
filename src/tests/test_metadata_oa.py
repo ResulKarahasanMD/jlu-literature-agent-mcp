@@ -1,4 +1,4 @@
-"""测试：元数据归一化、OA 通道、流式下载。"""
+"""Testler: metadata normalleştirme, OA kanalları, akışlı indirme."""
 
 from __future__ import annotations
 

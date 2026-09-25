@@ -1,17 +1,17 @@
-## Change
+## Değişiklik
 
-Describe the user-visible behavior and why it is needed.
+Kullanıcının göreceği davranışı ve neden gerektiğini açıklayın.
 
-## Evidence
+## Kanıt
 
-- [ ] Tests use synthetic/minimal fixtures and contain no protected full text.
-- [ ] Site observations are labelled verified, inferred, or unverified with a test date.
-- [ ] `docs` and the portable skill references are consistent with the implementation.
+- [ ] Testler sentetik/asgari fixture'lar kullanıyor ve korumalı tam metin içermiyor.
+- [ ] Site gözlemleri test tarihiyle birlikte doğrulanmış, çıkarım ya da doğrulanmamış olarak etiketlendi.
+- [ ] `docs` ve taşınabilir skill referansları uygulamayla tutarlı.
 
-## Verification
+## Doğrulama
 
 - [ ] `uv lock --check`
 - [ ] `uv run ruff check .`
 - [ ] `uv run pytest`
-- [ ] No PDF, CAJ, XPI, `.env`, database, browser profile, cookie, token, or log is included.
-- [ ] No CAPTCHA/paywall/rate-limit bypass or unsafe Zotero database write was added.
+- [ ] PDF, CAJ, XPI, `.env`, veritabanı, tarayıcı profili, çerez, token ya da günlük eklenmedi.
+- [ ] CAPTCHA/ödeme duvarı/hız sınırı aşma ya da güvensiz Zotero veritabanı yazımı eklenmedi.

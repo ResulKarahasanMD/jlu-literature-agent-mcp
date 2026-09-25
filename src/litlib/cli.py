@@ -1,4 +1,4 @@
-"""litlib CLI：环境守卫、任务队列与阶段执行入口。"""
+"""litlib CLI: ortam koruması, görev kuyruğu ve aşama çalıştırma giriş noktası."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _human_gb(nbytes: float) -> str:
 def _check_drive(path: Path) -> tuple[str, bool]:
     enforced = require_d_drive()
     ok = on_d_drive(path) if enforced else True
-    suffix = "" if ok else "  (未满足 LITLIB_REQUIRE_D_DRIVE)"
+    suffix = "" if ok else "  (LITLIB_REQUIRE_D_DRIVE karşılanmadı)"
     return (f"{'OK ' if ok else 'FAIL'} {path}{suffix}", ok)
 
 
@@ -86,27 +86,27 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     failed = [c for c in checks if not c[1]]
     print("-" * 64)
     if failed:
-        print(f"FAIL: {len(failed)} 项未通过 D 盘约束:")
+        print(f"FAIL: {len(failed)} kontrol D sürücüsü kısıtını geçemedi:")
         for label, _ in failed:
             print(f"  - {label}")
         return 1
-    print("PASS: 全部 D 盘约束通过")
+    print("PASS: tüm D sürücüsü kısıtları geçti")
     return 0
 
 
 def _read_input_file(path: str) -> list[str]:
     p = Path(path)
     if not p.exists():
-        raise SystemExit(f"输入文件不存在: {path}")
+        raise SystemExit(f"giriş dosyası yok: {path}")
     if p.suffix.lower() == ".csv":
         with p.open(encoding="utf-8-sig", newline="") as handle:
             reader = csv.DictReader(handle)
             if not reader.fieldnames:
-                raise SystemExit(f"CSV 缺少表头: {path}")
+                raise SystemExit(f"CSV'de başlık satırı yok: {path}")
             fields = {name.lower().strip(): name for name in reader.fieldnames if name}
             input_columns = [fields[name] for name in ("doi", "pmid", "pmcid", "arxiv", "title") if name in fields]
             if not input_columns:
-                raise SystemExit(f"CSV 缺少可识别输入列（doi/pmid/pmcid/arxiv/title）: {path}")
+                raise SystemExit(f"CSV'de tanınan giriş sütunu yok (doi/pmid/pmcid/arxiv/title): {path}")
             lines: list[str] = []
             for row in reader:
                 for column in input_columns:
@@ -124,11 +124,11 @@ def cmd_queue_add(args: argparse.Namespace) -> int:
     else:
         lines = args.inputs
     if not lines:
-        print("未提供任何 DOI/PMID/PMCID/arXiv/标题输入")
+        print("hiç DOI/PMID/PMCID/arXiv/başlık girişi verilmedi")
         return 2
     st = State()
     added, skipped = st.queue_add(lines, source=args.source)
-    print(f"新增任务: {added}, 因重复跳过: {skipped}")
+    print(f"eklenen görev: {added}, yinelendiği için atlanan: {skipped}")
     st.close()
     return 0
 
@@ -140,7 +140,7 @@ def cmd_queue_recover(args: argparse.Namespace) -> int:
             include_failed=args.failed, include_paused=args.paused)
     finally:
         st.close()
-    print(f"恢复任务: {recovered}, 达重试上限跳过: {skipped}")
+    print(f"kurtarılan görev: {recovered}, deneme sınırı nedeniyle atlanan: {skipped}")
     return 0
 
 
@@ -148,11 +148,11 @@ def cmd_status(args: argparse.Namespace) -> int:
     st = State()
     counts = st.state_counts()
     if counts:
-        print("任务统计:")
+        print("Görev istatistikleri:")
         for state, c in sorted(counts.items()):
             print(f"  {state:<20} {c}")
     else:
-        print("任务统计: (空)")
+        print("Görev istatistikleri: (boş)")
     if args.verbose:
         for t in st.list_tasks():
             safe_error = sanitize(t.get("last_error") or "")
@@ -162,7 +162,7 @@ def cmd_status(args: argparse.Namespace) -> int:
     if args.attempts:
         attempts = st.get_route_attempts(args.attempts)
         if not attempts:
-            print(f"任务 #{args.attempts} 无路线尝试记录")
+            print(f"görev #{args.attempts} için rota denemesi kaydı yok")
         for attempt in attempts:
             error = sanitize(attempt.get("error") or "")
             url = sanitize(attempt.get("url") or "")
@@ -214,14 +214,14 @@ def cmd_run(args: argparse.Namespace) -> int:
             for r in results:
                 mark = "OK " if r["ok"] else "FAIL"
                 print(f"  [{mark}] #{r['task_id']} {r['doi']} {r['detail']}")
-            print(f"verify: {sum(1 for r in results if r['ok'])}/{len(results)} 通过")
+            print(f"verify: {sum(1 for r in results if r['ok'])}/{len(results)} geçti")
             if not results or any(not r["ok"] for r in results):
                 exit_code = 1
         elif args.stage == "proposal":
-            print("请使用 `litlib proposal`；run 子命令不执行 proposal")
+            print("`litlib proposal` kullanın; run alt komutu proposal çalıştırmaz")
             exit_code = 2
         elif args.stage == "import":
-            print("请使用 `litlib import --lookup`；run 子命令不执行 import")
+            print("`litlib import --lookup` kullanın; run alt komutu import çalıştırmaz")
             exit_code = 2
     finally:
         st.close()
@@ -229,7 +229,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 async def _prepare_doi_task(doi: str) -> None:
-    """Ensure a single-DOI download has a queued task and resolved metadata."""
+    """Tek DOI indirmesi için kuyrukta bir görev ve çözümlenmiş metadata olmasını sağlar."""
     import httpx
 
     from litlib.metadata import fetch_metadata
@@ -240,13 +240,13 @@ async def _prepare_doi_task(doi: str) -> None:
         if work is None:
             added, _ = st.queue_add([doi], source="download")
             if added != 1:
-                raise RuntimeError(f"无法为 DOI 建立任务: {doi}")
+                raise RuntimeError(f"DOI için görev oluşturulamadı: {doi}")
             work = st.find_work_by_doi(doi)
         if work is None:
-            raise RuntimeError(f"任务建立后仍找不到 DOI: {doi}")
+            raise RuntimeError(f"görev oluşturulduktan sonra DOI hâlâ bulunamıyor: {doi}")
         task = st.get_task_for_work(work.work_id)
         if not task:
-            raise RuntimeError(f"work {work.work_id} 缺少任务记录")
+            raise RuntimeError(f"work {work.work_id} için görev kaydı yok")
         if work.title:
             return
         state = TaskState(task["state"])
@@ -260,8 +260,8 @@ async def _prepare_doi_task(doi: str) -> None:
             resolved = await fetch_metadata(client, work)
         if not resolved.title:
             if state is TaskState.METADATA_FETCH:
-                st.set_state(task["id"], TaskState.FAILED, error="单篇下载前未解析出元数据")
-            raise RuntimeError(f"未解析出 DOI 元数据: {doi}")
+                st.set_state(task["id"], TaskState.FAILED, error="tek makale indirmesinden önce metadata çözümlenemedi")
+            raise RuntimeError(f"DOI metadata'sı çözümlenemedi: {doi}")
         st.update_work(resolved)
         if state is TaskState.METADATA_FETCH:
             st.set_state(task["id"], TaskState.DEDUPED)
@@ -270,7 +270,7 @@ async def _prepare_doi_task(doi: str) -> None:
 
 
 def cmd_download(args: argparse.Namespace) -> int:
-    """按 DOI 下载正文并自动登记到任务库（下载 + 自动同步）。"""
+    """DOI ile ana metni indirir ve görev veritabanına otomatik kaydeder (indirme + otomatik eşitleme)."""
     import asyncio
 
     from litlib.config import paths
@@ -281,7 +281,7 @@ def cmd_download(args: argparse.Namespace) -> int:
     dest = Path(args.output) if args.output else paths.staging_downloads / f"{doi.replace('/', '_')}.pdf"
     ensure_storage_path(dest)
     if dest.exists() and not args.overwrite:
-        print(f"目标文件已存在，未覆盖: {dest}（需要时显式使用 --overwrite）")
+        print(f"hedef dosya zaten var, üzerine yazılmadı: {dest} (gerekirse açıkça --overwrite kullanın)")
         return 2
     asyncio.run(_prepare_doi_task(doi))
     info = asyncio.run(download_doi_and_register(doi, dest))
@@ -292,7 +292,7 @@ def cmd_download(args: argparse.Namespace) -> int:
 
 
 def cmd_inst(args: argparse.Namespace) -> int:
-    """inst 子命令：open/tokens/set-cred/check-cred/login。"""
+    """inst alt komutları: open/tokens/set-cred/check-cred/login."""
     from litlib.inst import cmd_open, cmd_register_token, cmd_tokens
 
     if args.inst_cmd == "open":
@@ -308,9 +308,9 @@ def cmd_inst(args: argparse.Namespace) -> int:
         try:
             asyncio.run(close_browser())
         except TimeoutError:
-            print("专用浏览器未运行")
+            print("özel tarayıcı çalışmıyor")
             return 0
-        print("专用浏览器已关闭")
+        print("özel tarayıcı kapatıldı")
         return 0
     if args.inst_cmd == "set-cred":
         return cmd_set_cred()
@@ -318,9 +318,9 @@ def cmd_inst(args: argparse.Namespace) -> int:
         from litlib.creds import load_institution_cred
         cred = load_institution_cred()
         if cred:
-            print("已保存机构凭证")
+            print("kurum kimlik bilgisi kayıtlı")
         else:
-            print("未保存机构凭证。请运行 `litlib inst set-cred`")
+            print("kurum kimlik bilgisi kayıtlı değil. `litlib inst set-cred` çalıştırın")
         return 0 if cred else 1
     if args.inst_cmd == "login":
         import litlib.inst_login as inst_login
@@ -333,7 +333,7 @@ def cmd_inst(args: argparse.Namespace) -> int:
         result = asyncio.run(inst_login.auto_login(url, host_hint))
         print(json.dumps(sanitize_payload(result), ensure_ascii=False, indent=2))
         return 0 if result.get("ok") else 1
-    print("缺少 inst 子命令。可用: open, close, tokens, set-cred, check-cred, login <url>")
+    print("inst alt komutu eksik. Kullanılabilir: open, close, tokens, set-cred, check-cred, login <url>")
     return 2
 
 
@@ -352,7 +352,7 @@ def cmd_cnki(args: argparse.Namespace) -> int:
     try:
         if args.cnki_cmd == "open":
             url = asyncio.run(open_cnki_campus())
-            print(f"CNKI 校园网入口已打开: {url}")
+            print(f"CNKI kampüs ağı girişi açıldı: {url}")
             return 0
         if args.cnki_cmd == "search":
             results = asyncio.run(search_cnki_campus(args.query, args.limit))
@@ -363,7 +363,7 @@ def cmd_cnki(args: argparse.Namespace) -> int:
             dest = Path(args.output)
             ensure_storage_path(dest)
             if dest.exists() and not args.overwrite:
-                print(f"目标文件已存在，未覆盖: {dest}（需要时显式使用 --overwrite）")
+                print(f"hedef dosya zaten var, üzerine yazılmadı: {dest} (gerekirse açıkça --overwrite kullanın)")
                 return 2
             info = asyncio.run(download_cnki_campus(args.url, dest))
             payload = sanitize_payload({"path": str(dest), **info})
@@ -381,12 +381,12 @@ def cmd_cnki(args: argparse.Namespace) -> int:
     except CNKIError as e:
         print(f"CNKI_ERROR: {e}")
         return 1
-    print("缺少 cnki 子命令。可用: open, search, download, login-carsi")
+    print("cnki alt komutu eksik. Kullanılabilir: open, search, download, login-carsi")
     return 2
 
 
 def _record_cnki_experience(dest: Path, article_url: str) -> None:
-    """CNKI 下载成功且文件真实存在后，记录个人经验（不覆盖 canonical 档案）。"""
+    """CNKI indirmesi başarılı olup dosya gerçekten varsa kişisel deneyimi kaydeder (kanonik profillerin üzerine yazmaz)."""
     try:
         from litlib import experience
 
@@ -401,35 +401,35 @@ def _record_cnki_experience(dest: Path, article_url: str) -> None:
 
 
 def cmd_set_cred() -> int:
-    """交互式保存机构统一认证账号密码（Windows 凭据管理器）。"""
+    """Kurumun birleşik kimlik doğrulama hesap parolasını etkileşimli olarak kaydeder (Windows Kimlik Bilgisi Yöneticisi)."""
     import getpass
 
     from litlib.creds import save_institution_cred
 
-    print("将保存吉林大学统一身份认证凭证（Windows 凭据管理器，系统级加密）")
+    print("Jilin Üniversitesi birleşik kimlik doğrulama bilgisi kaydedilecek (Windows Kimlik Bilgisi Yöneticisi, sistem düzeyinde şifreli)")
     try:
-        username = input("账号（吉大邮箱/工号/学号）: ").strip()
+        username = input("Hesap (JLU e-postası/personel no/öğrenci no): ").strip()
         if not username:
-            print("账号不能为空")
+            print("hesap boş olamaz")
             return 2
-        password = getpass.getpass("密码（输入不回显）: ")
+        password = getpass.getpass("Parola (ekranda görünmez): ")
         if not password:
-            print("密码不能为空")
+            print("parola boş olamaz")
             return 2
-        confirm = getpass.getpass("再次输入密码: ")
+        confirm = getpass.getpass("Parolayı tekrar girin: ")
         if password != confirm:
-            print("两次输入不一致")
+            print("iki giriş aynı değil")
             return 2
     except (EOFError, KeyboardInterrupt):
-        print("\n已取消")
+        print("\niptal edildi")
         return 130
     save_institution_cred(username, password)
-    print("已保存。运行 `litlib inst check-cred` 确认，`litlib inst login <url>` 自动登录。")
+    print("kaydedildi. Doğrulamak için `litlib inst check-cred`, otomatik giriş için `litlib inst login <url>` çalıştırın.")
     return 0
 
 
 def _work_ids_from_doi_file(st: State, path: str) -> set[str]:
-    """从 CSV 的 doi 列解析 DOI 集合，映射到 work_id。"""
+    """CSV'nin doi sütunundan DOI kümesini çıkarır, work_id'lere eşler."""
     import csv
 
     do = set()
@@ -461,7 +461,7 @@ def cmd_proposal(args: argparse.Namespace) -> int:
 
 
 def cmd_verify(args: argparse.Namespace) -> int:
-    """校验任务库已下载 PDF（存在性/SHA-256/内容），只读检查不改状态。"""
+    """Görev veritabanındaki indirilmiş PDF'leri doğrular (varlık/SHA-256/içerik); salt-okur kontrol, durumu değiştirmez."""
     from litlib.verify import verify_downloads
 
     st = State()
@@ -475,14 +475,14 @@ def cmd_verify(args: argparse.Namespace) -> int:
             if r["ok"]:
                 ok += 1
             print(f"  [{'OK ' if r['ok'] else 'FAIL'}] #{r['task_id']} {r['doi']} {r['detail']}")
-        print(f"verify: {ok}/{len(results)} 通过")
+        print(f"verify: {ok}/{len(results)} geçti")
         return 0 if results and ok == len(results) else 1
     finally:
         st.close()
 
 
 def cmd_review(args: argparse.Namespace) -> int:
-    """提案审阅确认：PROPOSAL_GENERATED → USER_REVIEWED。"""
+    """Öneri incelemesini onaylar: PROPOSAL_GENERATED → USER_REVIEWED."""
     from litlib.models import TaskState
 
     st = State()
@@ -496,20 +496,20 @@ def cmd_review(args: argparse.Namespace) -> int:
                 continue
             st.mark_reviewed(t["id"])
             n += 1
-        print(f"已标记审阅完成 {n} 篇")
+        print(f"{n} makale incelendi olarak işaretlendi")
     finally:
         st.close()
     return 0 if n else 1
 
 
 def cmd_import(args: argparse.Namespace) -> int:
-    """Zotero 导入确认：USER_REVIEWED → IMPORTED（记录 zotero_map）。"""
+    """Zotero içe aktarma onayı: USER_REVIEWED → IMPORTED (zotero_map'e kaydedilir)."""
     from datetime import datetime
 
     from litlib.models import TaskState
 
     if not args.lookup:
-        print("拒绝标记 IMPORTED：必须使用 --lookup 连接 Zotero 并验证 item key 与 PDF 附件")
+        print("IMPORTED işareti reddedildi: --lookup ile Zotero'ya bağlanıp item key ve PDF ekini doğrulamak gerekir")
         return 2
     st = State()
     zot = None
@@ -521,7 +521,7 @@ def cmd_import(args: argparse.Namespace) -> int:
             zot = ZoteroReadOnly()
             zot.list_collections()
         except Exception as exc:
-            print(f"Zotero Local API 不可用，未修改任何导入状态: {exc}")
+            print(f"Zotero Local API kullanılamıyor, hiçbir içe aktarma durumu değiştirilmedi: {exc}")
             return 1
         n = 0
         failed = 0
@@ -532,17 +532,17 @@ def cmd_import(args: argparse.Namespace) -> int:
                 continue
             work = st.get_work(t["work_id"])
             if not work:
-                print(f"  [FAIL] task #{t['id']} 缺少 work")
+                print(f"  [FAIL] task #{t['id']} work kaydı yok")
                 failed += 1
                 continue
             try:
                 matches = zot.find_exact_items(work)
                 if len(matches) != 1:
-                    raise ValueError(f"Zotero 精确匹配数为 {len(matches)}")
+                    raise ValueError(f"Zotero'da tam eşleşme sayısı: {len(matches)}")
                 item = matches[0]
                 attachment = zot.resolve_pdf(item)
                 if not attachment:
-                    raise ValueError("Zotero 条目没有可读取的 PDF 附件")
+                    raise ValueError("Zotero öğesinde okunabilir PDF eki yok")
                 key = item.get("key")
                 st.mark_imported(t["work_id"], key, batch)
             except Exception as exc:
@@ -550,7 +550,7 @@ def cmd_import(args: argparse.Namespace) -> int:
                 failed += 1
                 continue
             n += 1
-        print(f"已验证并标记 IMPORTED {n} 篇，失败 {failed} 篇（批次 {batch}）")
+        print(f"{n} makale doğrulanıp IMPORTED işaretlendi, {failed} başarısız (parti {batch})")
     finally:
         if zot is not None:
             zot.close()
@@ -561,25 +561,25 @@ def cmd_import(args: argparse.Namespace) -> int:
 def cmd_mcp(args: argparse.Namespace) -> int:
     from litlib.mcp_server import main as mcp_main
 
-    print("启动只读 MCP server（Zotero 需运行）...", file=sys.stderr)
+    print("salt-okur MCP sunucusu başlatılıyor (Zotero çalışıyor olmalı)...", file=sys.stderr)
     mcp_main()
     return 0
 
 
 def cmd_learn(args: argparse.Namespace) -> int:
-    """个人经验库：查看/添加/删除/导出（本地自进化，不影响 canonical 档案）。"""
+    """Kişisel deneyim kütüphanesi: görüntüle/ekle/sil/dışa aktar (yerel, kanonik profilleri etkilemez)."""
     from litlib import experience
 
     if args.learn_cmd == "list":
         experiences = experience.load_experiences()
         if not experiences:
-            print("个人经验库为空。成功解决新站点后会自动记录，")
-            print("也可用 `litlib learn add --domain <域名> --route <路线> --note <说明>` 手动补充。")
+            print("Kişisel deneyim kütüphanesi boş. Yeni bir site başarıyla çözülünce otomatik kaydedilir,")
+            print("ya da `litlib learn add --domain <alan-adı> --route <rota> --note <açıklama>` ile elle eklenebilir.")
             return 0
         hits = ([e for e in experiences if _domain_filter(args.domain)(e)]
                 if args.domain else experiences)
         if not hits:
-            print(f"没有与 `{args.domain}` 匹配的经验")
+            print(f"`{args.domain}` ile eşleşen deneyim yok")
             return 0
         for e in hits:
             tag = f"  [{e.get('source')}] {e.get('domain')} <- {e.get('route')}"
@@ -599,23 +599,23 @@ def cmd_learn(args: argparse.Namespace) -> int:
                 domain=args.domain, route=args.route, notes=args.note,
                 url_pattern=args.url_pattern or "", doi_prefix=args.doi_prefix or "")
         except ValueError as exc:
-            print(f"add 失败: {exc}")
+            print(f"add başarısız: {exc}")
             return 2
-        print(f"已记录经验: {entry['domain']} <- {entry['route']} (id={entry['id']})")
+        print(f"deneyim kaydedildi: {entry['domain']} <- {entry['route']} (id={entry['id']})")
         return 0
     if args.learn_cmd == "remove":
         ok = experience.remove_experience(args.id)
-        print(f"已删除经验 {args.id}" if ok else f"未找到经验 {args.id}")
+        print(f"deneyim silindi: {args.id}" if ok else f"deneyim bulunamadı: {args.id}")
         return 0 if ok else 1
     if args.learn_cmd == "export":
         print(experience.render_markdown())
         return 0
-    print("缺少 learn 子命令")
+    print("learn alt komutu eksik")
     return 2
 
 
 def _domain_filter(domain: str):
-    """返回与给定域名匹配的经验过滤器（子域/主域双向匹配）。"""
+    """Verilen alan adıyla eşleşen deneyim filtresini döndürür (alt alan adı/ana alan adı iki yönlü eşleşme)."""
     from litlib.experience import _domain_key
 
     key = _domain_key(domain)
@@ -651,7 +651,7 @@ def cmd_uniprot(args: argparse.Namespace) -> int:
     try:
         entries = asyncio.run(fetch_all())
     except (httpx.HTTPError, ValueError) as exc:
-        print(f"UniProt 获取失败: {exc}")
+        print(f"UniProt alınamadı: {exc}")
         return 1
     payload = entries[0] if len(entries) == 1 else entries
     _write_json_output(payload, args.output)
@@ -667,7 +667,7 @@ def cmd_uniprot(args: argparse.Namespace) -> int:
                     if reference.get(key)
                 )
             added, skipped = st.queue_add(identifiers, source="uniprot")
-            print(f"关联文献入队: {added}，重复跳过: {skipped}")
+            print(f"bağlantılı literatür kuyruğa eklendi: {added}, yinelendiği için atlanan: {skipped}")
         finally:
             st.close()
     return 0
@@ -679,7 +679,7 @@ def cmd_evidence(args: argparse.Namespace) -> int:
     try:
         result = scan_pdf_evidence(args.pdf)
     except Exception as exc:
-        print(f"证据扫描失败: {exc}")
+        print(f"kanıt taraması başarısız: {exc}")
         return 1
     _write_json_output(result, args.output)
     return 0
@@ -705,7 +705,7 @@ def cmd_supplement(args: argparse.Namespace) -> int:
         try:
             _write_json_output(asyncio.run(discover()), args.output)
         except Exception as exc:
-            print(f"补充材料发现失败: {exc}")
+            print(f"ek materyal bulunamadı: {exc}")
             return 1
         return 0
     if args.supplement_cmd == "download":
@@ -714,7 +714,7 @@ def cmd_supplement(args: argparse.Namespace) -> int:
             paths.staging_supplements / Path(urlparse(args.url).path).name
         )
         if not output_path.name:
-            print("无法从 URL 推断补充文件名，请提供 --output")
+            print("ek dosya adı URL'den çıkarılamadı, --output verin")
             return 2
 
         async def download() -> dict:
@@ -727,10 +727,10 @@ def cmd_supplement(args: argparse.Namespace) -> int:
         try:
             _write_json_output(asyncio.run(download()), "")
         except Exception as exc:
-            print(f"补充材料下载失败: {exc}")
+            print(f"ek materyal indirilemedi: {exc}")
             return 1
         return 0
-    print("缺少 supplement 子命令")
+    print("supplement alt komutu eksik")
     return 2
 
 
@@ -752,136 +752,136 @@ def cmd_cellulase(args: argparse.Namespace) -> int:
             records = normalize_records(load_jsonl(args.input))
             maxima = select_maxima(records)
             write_jsonl(args.output, maxima)
-            print(f"最大值记录: {len(maxima)} -> {args.output}")
+            print(f"maksimum kayıtları: {len(maxima)} -> {args.output}")
             return 0
         except Exception as exc:
-            print(f"最大值筛选失败: {exc}")
+            print(f"maksimum seçimi başarısız: {exc}")
             return 1
-    print("缺少 cellulase 子命令")
+    print("cellulase alt komutu eksik")
     return 2
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="litlib", description="个人文献库系统")
+    p = argparse.ArgumentParser(prog="litlib", description="Kişisel literatür kütüphanesi sistemi")
     p.add_argument("--version", action="version", version=__version__)
     sub = p.add_subparsers(dest="cmd")
 
-    d = sub.add_parser("doctor", help="环境与 D 盘守卫")
-    d.add_argument("--storage", action="store_true", help="附带磁盘容量报告")
+    d = sub.add_parser("doctor", help="ortam ve D sürücüsü koruması")
+    d.add_argument("--storage", action="store_true", help="disk kapasitesi raporunu da göster")
 
-    q = sub.add_parser("queue", help="任务队列")
+    q = sub.add_parser("queue", help="görev kuyruğu")
     qsub = q.add_subparsers(dest="queue_cmd")
-    add = qsub.add_parser("add", help="添加任务（DOI/PMID/标题，文件或直接输入）")
-    add.add_argument("--file", "-f", help="输入文件（每行一个，支持 CSV 首列）")
-    add.add_argument("--source", default="manual", help="来源标记")
-    add.add_argument("inputs", nargs="*", help="直接输入条目")
-    recover = qsub.add_parser("recover", help="恢复崩溃遗留的中间状态任务")
-    recover.add_argument("--failed", action="store_true", help="同时重新排队 FAILED 任务")
-    recover.add_argument("--paused", action="store_true", help="同时重新排队 RATE_LIMITED/HUMAN_REQUIRED 任务")
+    add = qsub.add_parser("add", help="görev ekle (DOI/PMID/başlık; dosyadan ya da doğrudan)")
+    add.add_argument("--file", "-f", help="giriş dosyası (satır başına bir kayıt; CSV'de ilk sütun desteklenir)")
+    add.add_argument("--source", default="manual", help="kaynak etiketi")
+    add.add_argument("inputs", nargs="*", help="doğrudan girilen kayıtlar")
+    recover = qsub.add_parser("recover", help="çökmeden kalan ara durumdaki görevleri kurtar")
+    recover.add_argument("--failed", action="store_true", help="FAILED görevleri de yeniden kuyruğa al")
+    recover.add_argument("--paused", action="store_true", help="RATE_LIMITED/HUMAN_REQUIRED görevleri de yeniden kuyruğa al")
 
-    s = sub.add_parser("status", help="任务状态")
-    s.add_argument("--disk", action="store_true", help="磁盘容量")
-    s.add_argument("--verbose", "-v", action="store_true", help="列出任务明细")
-    s.add_argument("--attempts", type=int, help="列出指定任务的逐路线下载审计")
+    s = sub.add_parser("status", help="görev durumu")
+    s.add_argument("--disk", action="store_true", help="disk kapasitesi")
+    s.add_argument("--verbose", "-v", action="store_true", help="görev ayrıntılarını listele")
+    s.add_argument("--attempts", type=int, help="belirtilen görevin rota rota indirme denetimini listele")
 
-    v = sub.add_parser("verify", help="校验已下载 PDF（存在性/SHA-256/内容）")
-    v.add_argument("--task", default="", help="仅校验指定任务 id（逗号分隔）")
+    v = sub.add_parser("verify", help="indirilmiş PDF'leri doğrula (varlık/SHA-256/içerik)")
+    v.add_argument("--task", default="", help="yalnız belirtilen görev id'lerini doğrula (virgülle ayrılmış)")
 
-    r = sub.add_parser("run", help="执行阶段")
+    r = sub.add_parser("run", help="aşama çalıştır")
     r.add_argument("--stage", choices=STAGES, required=True)
     r.add_argument("--limit", type=int, default=100,
-                   help="本批处理上限；机构阶段代码强制不超过 10")
+                   help="bu partinin üst sınırı; kurum aşamasında kod 10'u aşmaya izin vermez")
     r.add_argument("--access-mode", choices=("auto", "campus", "offcampus"),
-                   default="auto", help="机构阶段路线顺序（默认 auto）")
+                   default="auto", help="kurum aşamasının rota sırası (varsayılan auto)")
 
-    dl = sub.add_parser("download", help="按 DOI 下载正文并自动登记到任务库")
-    dl.add_argument("doi", help="DOI，如 10.1002/pro.4785")
-    dl.add_argument("--output", "-o", default="", help="PDF 输出路径（默认 staging/downloads）")
-    dl.add_argument("--overwrite", action="store_true", help="显式允许覆盖已存在的目标 PDF")
+    dl = sub.add_parser("download", help="DOI ile ana metni indir ve görev veritabanına otomatik kaydet")
+    dl.add_argument("doi", help="DOI, örn. 10.1002/pro.4785")
+    dl.add_argument("--output", "-o", default="", help="PDF çıktı yolu (varsayılan staging/downloads)")
+    dl.add_argument("--overwrite", action="store_true", help="var olan hedef PDF'in üzerine yazmaya açıkça izin ver")
 
-    i = sub.add_parser("inst", help="机构通道（WebVPN 网关 + 专用 Chrome + 机构登录）")
+    i = sub.add_parser("inst", help="kurum kanalı (WebVPN ağ geçidi + özel Chrome + kurum girişi)")
     isub = i.add_subparsers(dest="inst_cmd")
-    open_cmd = isub.add_parser("open", help="启动专用 Chrome")
-    open_cmd.add_argument("--vpn", action="store_true", help="同时打开 WebVPN 登录页")
-    isub.add_parser("tokens", help="列出已登记的网关域名 token")
-    register_token = isub.add_parser("register-token", help="从当前 WebVPN 标签页登记 publisher token")
-    register_token.add_argument("domain", help="原始 publisher 域名，如 nature.com")
-    isub.add_parser("close", help="关闭专用 Chrome")
-    isub.add_parser("set-cred", help="保存机构统一认证账号密码（凭据管理器）")
-    isub.add_parser("check-cred", help="确认机构凭证已保存")
-    login = isub.add_parser("login", help="自动完成一次机构登录")
-    login.add_argument("url", help="出版社站点 URL（如 https://www.cell.com/）")
-    login.add_argument("--host", default="", help="期望回跳的主机（可选）")
+    open_cmd = isub.add_parser("open", help="özel Chrome'u başlat")
+    open_cmd.add_argument("--vpn", action="store_true", help="WebVPN giriş sayfasını da aç")
+    isub.add_parser("tokens", help="kayıtlı ağ geçidi alan adı token'larını listele")
+    register_token = isub.add_parser("register-token", help="geçerli WebVPN sekmesinden yayıncı token'ı kaydet")
+    register_token.add_argument("domain", help="özgün yayıncı alan adı, örn. nature.com")
+    isub.add_parser("close", help="özel Chrome'u kapat")
+    isub.add_parser("set-cred", help="kurumun birleşik kimlik doğrulama hesap parolasını kaydet (Kimlik Bilgisi Yöneticisi)")
+    isub.add_parser("check-cred", help="kurum kimlik bilgisinin kayıtlı olduğunu doğrula")
+    login = isub.add_parser("login", help="bir kurum girişini otomatik tamamla")
+    login.add_argument("url", help="yayıncı sitesi URL'i (örn. https://www.cell.com/)")
+    login.add_argument("--host", default="", help="geri dönülmesi beklenen host (isteğe bağlı)")
 
-    c = sub.add_parser("cnki", help="CNKI 校园网检索下载与 CARSI 登录")
+    c = sub.add_parser("cnki", help="CNKI kampüs ağı arama/indirme ve CARSI girişi")
     csub = c.add_subparsers(dest="cnki_cmd")
-    csub.add_parser("open", help="打开 CNKI 校园网检索页；安全验证需人工完成")
-    cnki_search = csub.add_parser("search", help="检索 CNKI 校园网会话")
-    cnki_search.add_argument("query", help="检索词")
-    cnki_search.add_argument("--limit", type=int, default=10, help="最多返回条数")
-    cnki_download = csub.add_parser("download", help="下载一个 CNKI 条目 PDF")
-    cnki_download.add_argument("url", help="CNKI 文献详情页 URL")
-    cnki_download.add_argument("--output", required=True, help="PDF 输出路径")
-    cnki_download.add_argument("--overwrite", action="store_true", help="显式允许覆盖已存在文件")
-    csub.add_parser("login-carsi", help="校外 CNKI CARSI/机构登录（待非校园网验证）")
+    csub.add_parser("open", help="CNKI kampüs ağı arama sayfasını aç; güvenlik doğrulaması elle tamamlanmalı")
+    cnki_search = csub.add_parser("search", help="CNKI kampüs ağı oturumunda ara")
+    cnki_search.add_argument("query", help="arama terimi")
+    cnki_search.add_argument("--limit", type=int, default=10, help="en fazla döndürülecek kayıt sayısı")
+    cnki_download = csub.add_parser("download", help="bir CNKI kaydının PDF'ini indir")
+    cnki_download.add_argument("url", help="CNKI makale ayrıntı sayfası URL'i")
+    cnki_download.add_argument("--output", required=True, help="PDF çıktı yolu")
+    cnki_download.add_argument("--overwrite", action="store_true", help="var olan dosyanın üzerine yazmaya açıkça izin ver")
+    csub.add_parser("login-carsi", help="kampüs dışı CNKI CARSI/kurum girişi (kampüs dışında henüz doğrulanmadı)")
 
-    sub.add_parser("mcp", help="启动只读 MCP server")
+    sub.add_parser("mcp", help="salt-okur MCP sunucusunu başlat")
 
-    pr = sub.add_parser("proposal", help="生成导入提案（RIS + 清单）")
-    pr.add_argument("--doi-file", "-f", default="", help="仅包含该 CSV 中的 DOI（doi 列）")
-    rv = sub.add_parser("review", help="提案审阅确认（PROPOSAL_GENERATED → USER_REVIEWED）")
-    rv.add_argument("--doi-file", "-f", default="", help="仅处理该 CSV 中的 DOI（doi 列）")
-    im = sub.add_parser("import", help="Zotero 导入确认（USER_REVIEWED → IMPORTED）")
-    im.add_argument("--batch", default="", help="导入批次名（默认当前时间戳）")
-    im.add_argument("--doi-file", "-f", default="", help="仅处理该 CSV 中的 DOI（doi 列）")
-    im.add_argument("--lookup", action="store_true", help="尝试经 Zotero Local API 按 DOI 回填 item key")
+    pr = sub.add_parser("proposal", help="içe aktarma önerisi üret (RIS + liste)")
+    pr.add_argument("--doi-file", "-f", default="", help="yalnız bu CSV'deki DOI'leri dahil et (doi sütunu)")
+    rv = sub.add_parser("review", help="öneri incelemesini onayla (PROPOSAL_GENERATED → USER_REVIEWED)")
+    rv.add_argument("--doi-file", "-f", default="", help="yalnız bu CSV'deki DOI'leri işle (doi sütunu)")
+    im = sub.add_parser("import", help="Zotero içe aktarma onayı (USER_REVIEWED → IMPORTED)")
+    im.add_argument("--batch", default="", help="içe aktarma parti adı (varsayılan: geçerli zaman damgası)")
+    im.add_argument("--doi-file", "-f", default="", help="yalnız bu CSV'deki DOI'leri işle (doi sütunu)")
+    im.add_argument("--lookup", action="store_true", help="Zotero Local API üzerinden DOI ile item key'i doldurmayı dene")
 
-    lr = sub.add_parser("learn", help="个人经验库（本地自进化）")
+    lr = sub.add_parser("learn", help="kişisel deneyim kütüphanesi (yerel, kendini geliştiren)")
     lrsub = lr.add_subparsers(dest="learn_cmd")
-    learn_list = lrsub.add_parser("list", help="列出个人经验（可用 --domain 过滤）")
-    learn_list.add_argument("--domain", default="", help="过滤域名")
-    lrsub.add_parser("export", help="导出 Markdown 摘要（Agent 可读）")
-    learn_add = lrsub.add_parser("add", help="手动补充经验")
-    learn_add.add_argument("--domain", required=True, help="站点域名，如 pubs.acs.org")
-    learn_add.add_argument("--route", required=True, help="路线名，如 direct-httpx / cnki-pdf")
-    learn_add.add_argument("--note", required=True, help="经验说明（人工观察结论）")
-    learn_add.add_argument("--url-pattern", default="", help="可复用的 URL 模式（自动脱敏）")
-    learn_add.add_argument("--doi-prefix", default="", help="DOI 前缀，如 10.1021")
-    learn_remove = lrsub.add_parser("remove", help="按 id 删除一条经验")
-    learn_remove.add_argument("id", help="经验 id（learn list 可见）")
+    learn_list = lrsub.add_parser("list", help="kişisel deneyimleri listele (--domain ile süzülebilir)")
+    learn_list.add_argument("--domain", default="", help="süzülecek alan adı")
+    lrsub.add_parser("export", help="Markdown özeti dışa aktar (Agent okuyabilir)")
+    learn_add = lrsub.add_parser("add", help="elle deneyim ekle")
+    learn_add.add_argument("--domain", required=True, help="site alan adı, örn. pubs.acs.org")
+    learn_add.add_argument("--route", required=True, help="rota adı, örn. direct-httpx / cnki-pdf")
+    learn_add.add_argument("--note", required=True, help="deneyim açıklaması (insan gözleminin sonucu)")
+    learn_add.add_argument("--url-pattern", default="", help="yeniden kullanılabilir URL kalıbı (otomatik maskelenir)")
+    learn_add.add_argument("--doi-prefix", default="", help="DOI öneki, örn. 10.1021")
+    learn_remove = lrsub.add_parser("remove", help="id ile bir deneyimi sil")
+    learn_remove.add_argument("id", help="deneyim id'si (learn list'te görünür)")
 
-    up = sub.add_parser("uniprot", help="获取 UniProt 条目、序列和关联文献")
-    up.add_argument("accessions", nargs="+", help="UniProt accession，可一次提供多个")
-    up.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
-    up.add_argument("--queue", action="store_true", help="将条目关联的 DOI/PMID/PMCID 加入任务队列")
+    up = sub.add_parser("uniprot", help="UniProt kaydını, dizisini ve bağlantılı literatürü al")
+    up.add_argument("accessions", nargs="+", help="UniProt accession; birden fazla verilebilir")
+    up.add_argument("--output", "-o", default="", help="JSON çıktı yolu; verilmezse ekrana yazdırılır")
+    up.add_argument("--queue", action="store_true", help="kayda bağlı DOI/PMID/PMCID'leri görev kuyruğuna ekle")
 
-    ev = sub.add_parser("evidence", help="扫描论文 PDF 的目标字段与补充材料/图表线索")
+    ev = sub.add_parser("evidence", help="makale PDF'inde hedef alanları ve ek materyal/şekil ipuçlarını tara")
     evsub = ev.add_subparsers(dest="evidence_cmd")
-    evscan = evsub.add_parser("scan", help="扫描一个 PDF")
-    evscan.add_argument("pdf", help="正文 PDF 路径")
-    evscan.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
+    evscan = evsub.add_parser("scan", help="bir PDF'i tara")
+    evscan.add_argument("pdf", help="ana metin PDF yolu")
+    evscan.add_argument("--output", "-o", default="", help="JSON çıktı yolu; verilmezse ekrana yazdırılır")
 
-    sp = sub.add_parser("supplement", help="发现或下载补充材料/Source Data")
+    sp = sub.add_parser("supplement", help="ek materyal/Source Data bul ya da indir")
     spsub = sp.add_subparsers(dest="supplement_cmd")
-    spdiscover = spsub.add_parser("discover", help="扫描文章页的补充材料链接")
-    spdiscover.add_argument("article_url", help="文章页 URL")
-    spdiscover.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
-    spdownload = spsub.add_parser("download", help="下载并校验一个补充文件")
-    spdownload.add_argument("url", help="补充文件 URL")
-    spdownload.add_argument("--output", "-o", default="", help="本地输出路径（默认 staging/supplements）")
-    spdownload.add_argument("--doi", default="", help="主论文 DOI")
-    spdownload.add_argument("--label", default="supplement", help="文件标签")
+    spdiscover = spsub.add_parser("discover", help="makale sayfasındaki ek materyal bağlantılarını tara")
+    spdiscover.add_argument("article_url", help="makale sayfası URL'i")
+    spdiscover.add_argument("--output", "-o", default="", help="JSON çıktı yolu; verilmezse ekrana yazdırılır")
+    spdownload = spsub.add_parser("download", help="bir ek dosyayı indirip doğrula")
+    spdownload.add_argument("url", help="ek dosya URL'i")
+    spdownload.add_argument("--output", "-o", default="", help="yerel çıktı yolu (varsayılan staging/supplements)")
+    spdownload.add_argument("--doi", default="", help="ana makalenin DOI'si")
+    spdownload.add_argument("--label", default="supplement", help="dosya etiketi")
     spdownload.add_argument("--media-type", default="", help="HTTP media type")
-    spdownload.add_argument("--overwrite", action="store_true", help="显式允许覆盖")
+    spdownload.add_argument("--overwrite", action="store_true", help="üzerine yazmaya açıkça izin ver")
 
-    ce = sub.add_parser("cellulase", help="纤维素酶结构化记录工具")
+    ce = sub.add_parser("cellulase", help="selülaz yapılandırılmış kayıt aracı")
     cesub = ce.add_subparsers(dest="cellulase_cmd")
-    cevalidate = cesub.add_parser("validate", help="验证 JSONL 记录和缺失状态")
+    cevalidate = cesub.add_parser("validate", help="JSONL kayıtlarını ve eksik alan durumlarını doğrula")
     cevalidate.add_argument("input", help="CellulaseMeasurement JSONL")
-    cevalidate.add_argument("--output", "-o", default="", help="JSON 输出路径；不指定则打印")
-    cemax = cesub.add_parser("maxima", help="按构建体/底物/指标/单位选择最大观测值")
+    cevalidate.add_argument("--output", "-o", default="", help="JSON çıktı yolu; verilmezse ekrana yazdırılır")
+    cemax = cesub.add_parser("maxima", help="yapı/substrat/metrik/birim grubuna göre en yüksek gözlenen değeri seç")
     cemax.add_argument("input", help="CellulaseMeasurement JSONL")
-    cemax.add_argument("--output", "-o", required=True, help="最大值 JSONL 输出路径")
+    cemax.add_argument("--output", "-o", required=True, help="maksimum değerler için JSONL çıktı yolu")
     return p
 
 
@@ -898,7 +898,7 @@ def main(argv: list[str] | None = None) -> int:
             return cmd_queue_add(args)
         if args.queue_cmd == "recover":
             return cmd_queue_recover(args)
-        print("缺少 queue 子命令")
+        print("queue alt komutu eksik")
         return 2
     if args.cmd == "status":
         return cmd_status(args)
@@ -927,13 +927,13 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "evidence":
         if args.evidence_cmd == "scan":
             return cmd_evidence(args)
-        print("缺少 evidence 子命令")
+        print("evidence alt komutu eksik")
         return 2
     if args.cmd == "supplement":
         return cmd_supplement(args)
     if args.cmd == "cellulase":
         return cmd_cellulase(args)
-    print("缺少命令。可用: doctor, queue add, status, run, download, proposal, review, import, mcp")
+    print("komut eksik. Kullanılabilir: doctor, queue add, status, run, download, proposal, review, import, mcp")
     return 2
 
 

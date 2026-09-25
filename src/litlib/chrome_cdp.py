@@ -1,4 +1,4 @@
-"""吉大 WebVPN 机构通道：专用 Chrome + CDP（并发 1，有监督小批量）。"""
+"""JLU WebVPN kurum kanalı: özel Chrome + CDP (eşzamanlılık 1, gözetimli küçük partiler)."""
 
 from __future__ import annotations
 
@@ -97,16 +97,16 @@ def launch_chrome() -> ChromeSession:
     owned = _load_owned_session()
     if _cdp_available():
         if owned:
-            logger.info("复用专用 Chrome（pid=%s）", owned["pid"])
+            logger.info("özel Chrome yeniden kullanılıyor (pid=%s)", owned["pid"])
             return ChromeSession()
         raise RuntimeError(
-            f"CDP 端口 {CDP_PORT} 已被非 litlib 浏览器占用；为避免操作错误会话，请先关闭该实例。")
+            f"CDP portu {CDP_PORT} litlib dışı bir tarayıcı tarafından kullanılıyor; yanlış oturumda işlem yapmamak için önce o örneği kapatın.")
     if owned:
         raise RuntimeError(
-            "检测到 litlib 专用 Chrome 进程仍在运行但 CDP 无响应；请手动关闭该窗口后重试。")
+            "litlib'in özel Chrome süreci çalışıyor ama CDP yanıt vermiyor; pencereyi elle kapatıp yeniden deneyin.")
     exe = find_chrome()
     if not exe:
-        raise FileNotFoundError("未找到 Chrome/Edge")
+        raise FileNotFoundError("Chrome/Edge bulunamadı")
     paths.chrome_profile.mkdir(parents=True, exist_ok=True)
     paths.chrome_cache.mkdir(parents=True, exist_ok=True)
     DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -121,7 +121,7 @@ def launch_chrome() -> ChromeSession:
         "--disable-background-networking",
         "about:blank",
     ]
-    logger.info("启动专用 Chrome（profile=%s, CDP 127.0.0.1:%s）", paths.chrome_profile, CDP_PORT)
+    logger.info("özel Chrome başlatılıyor (profile=%s, CDP 127.0.0.1:%s)", paths.chrome_profile, CDP_PORT)
     proc = subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
     SESSION_FILE.write_text(json.dumps({
@@ -143,18 +143,18 @@ async def wait_for_cdp(timeout: float = 30.0) -> str:
         except Exception:
             pass
         await asyncio.sleep(0.5)
-    raise TimeoutError(f"CDP 端口 {CDP_PORT} 无响应（Chrome 未启动？）")
+    raise TimeoutError(f"CDP portu {CDP_PORT} yanıt vermiyor (Chrome başlatılmadı mı?)")
 
 
 async def browser_ws_url() -> str:
-    """返回 browser-level WebSocket 地址（/json/version）。"""
+    """Tarayıcı düzeyindeki WebSocket adresini döndürür (/json/version)."""
     return await wait_for_cdp(10)
 
 
 async def close_browser() -> None:
-    """显式关闭 CDP 专用浏览器。"""
+    """CDP'ye bağlı özel tarayıcıyı açıkça kapatır."""
     if not _load_owned_session():
-        raise RuntimeError("没有可验证归属的 litlib 专用浏览器")
+        raise RuntimeError("sahipliği doğrulanabilen bir litlib özel tarayıcısı yok")
     bws = await browser_ws_url()
     async with websockets.connect(bws, max_size=50 * 1024 * 1024) as ws:
         await ws.send(json.dumps({"id": 1, "method": "Browser.close"}))
@@ -166,9 +166,9 @@ async def close_browser() -> None:
 
 
 async def create_tab_navigate(url: str, timeout: float = 60.0) -> str | None:
-    """用 browser-level Target.createTarget 开新标签并导航，返回新标签 page WS URL。
+    """Tarayıcı düzeyinde Target.createTarget ile yeni sekme açıp gezinir, yeni sekmenin page WS URL'ini döndürür.
 
-    /json/new 在本版本 Chrome 已失效，必须走 browser session。
+    /json/new bu Chrome sürümünde çalışmıyor, browser session kullanılmalı.
     """
     bws = await browser_ws_url()
     async with websockets.connect(bws, max_size=50 * 1024 * 1024) as ws:
@@ -180,7 +180,7 @@ async def create_tab_navigate(url: str, timeout: float = 60.0) -> str | None:
         target_id = resp.get("result", {}).get("targetId", "")
         if not target_id:
             return None
-    # 轮询 /json/list 找到该 target
+    # /json/list yoklanarak bu target bulunur
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         async with httpx.AsyncClient(timeout=5) as client:
@@ -207,7 +207,7 @@ class Tab:
             await self._ws.close()
 
     async def close_target(self) -> None:
-        """关闭当前页面 target；失败时至少断开调试连接。"""
+        """Geçerli sayfa target'ını kapatır; başarısız olursa en azından hata ayıklama bağlantısını keser."""
         try:
             if self._ws:
                 await self.cmd("Page.close")
@@ -228,7 +228,7 @@ class Tab:
             resp = json.loads(await self._ws.recv())
             if resp.get("id") == msg_id:
                 if "error" in resp:
-                    raise RuntimeError(f"CDP {method} 失败: {resp['error']}")
+                    raise RuntimeError(f"CDP {method} başarısız: {resp['error']}")
                 return resp.get("result", {})
             self._events.append(resp)
 
@@ -236,7 +236,7 @@ class Tab:
 async def new_tab(client: httpx.AsyncClient, url: str) -> Tab:
     ws = await create_tab_navigate(url, timeout=30)
     if not ws:
-        raise RuntimeError("无法创建浏览器标签页")
+        raise RuntimeError("tarayıcı sekmesi oluşturulamadı")
     return Tab(ws)
 
 
@@ -254,16 +254,16 @@ async def navigate(tab: Tab, url: str, timeout: float = 60.0) -> None:
 
 
 async def page_title(tab: Tab) -> str:
-    """读取当前页标题（识别验证码/拦截页等）。"""
+    """Geçerli sayfa başlığını okur (doğrulama/engelleme sayfalarını tanımak için)."""
     try:
         r = await tab.cmd("Runtime.evaluate", {"expression": "document.title", "returnByValue": True})
         return str(r.get("result", {}).get("value", ""))[:80]
     except Exception:
-        return "<title 读取失败>"
+        return "<title okunamadı>"
 
 
 async def dismiss_cookie_banner(tab: Tab) -> str:
-    """尝试点击 'Accept all cookies' 类横幅按钮，返回点击结果描述。"""
+    """'Accept all cookies' türü bir afiş düğmesine tıklamayı dener, sonucun açıklamasını döndürür."""
     js = r'''
     (() => {
       const els = [...document.querySelectorAll('button, a, [role="button"]')];
@@ -285,7 +285,7 @@ async def dismiss_cookie_banner(tab: Tab) -> str:
 
 
 async def click_pdf_link(tab: Tab) -> str:
-    """查找并点击落地页上的 PDF 下载链接，返回点击信息或 'none'。"""
+    """Açılış sayfasındaki PDF indirme bağlantısını bulup tıklar; tıklama bilgisini ya da 'none' döndürür."""
     js = r'''
     (() => {
       const anchors = [...document.querySelectorAll('a, button, [role="button"], input[type="button"], input[type="submit"]')];
@@ -315,7 +315,7 @@ async def click_pdf_link(tab: Tab) -> str:
 
 
 async def close_extra_tabs(client: httpx.AsyncClient, keep_url: str = "") -> None:
-    """保留 keep_url 页签，关闭其余（含 about:blank）。"""
+    """keep_url sekmesini tutar, diğerlerini (about:blank dahil) kapatır."""
     r = await client.get(f"http://{CDP_HOST}:{CDP_PORT}/json/list", timeout=10)
     r.raise_for_status()
     for page in r.json():
@@ -331,7 +331,7 @@ async def close_extra_tabs(client: httpx.AsyncClient, keep_url: str = "") -> Non
 
 def wait_for_download_file(download_dir: Path, timeout: float = 120.0,
                            min_size: int = 1024, seen: set[Path] | None = None) -> Path | None:
-    """轮询下载目录中相对已有集合新增的完成 PDF。"""
+    """İndirme dizinini yoklayarak mevcut kümeye göre yeni tamamlanmış PDF'leri bulur."""
     seen = seen or set()
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:

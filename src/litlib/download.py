@@ -1,4 +1,4 @@
-"""流式下载：.part → SHA-256 增量 → atomic rename（§27.7）。"""
+"""Akışlı indirme: .part → artımlı SHA-256 → atomik yeniden adlandırma (§27.7)."""
 
 from __future__ import annotations
 
@@ -19,7 +19,7 @@ async def download_to_file(
     dest: Path,
     max_bytes: int | None = None,
 ) -> tuple[Path, str, int]:
-    """流式下载到 dest.part，校验后 atomic rename。返回 (最终路径, sha256, 字节数)。"""
+    """dest.part'a akışlı indirir, doğrulamadan sonra atomik olarak yeniden adlandırır. (son yol, sha256, bayt sayısı) döndürür."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     part = dest.with_suffix(dest.suffix + ".part")
     tmp_digest = Path(str(part) + ".sha256")
@@ -33,7 +33,7 @@ async def download_to_file(
                 async for chunk in resp.aiter_bytes(CHUNK_SIZE):
                     total += len(chunk)
                     if max_bytes and total > max_bytes:
-                        raise ValueError(f"超过大小上限 {max_bytes} 字节")
+                        raise ValueError(f"boyut üst sınırı aşıldı: {max_bytes} bayt")
                     f.write(chunk)
         digest = sha256_of_file(part)
         tmp_digest.write_text(digest)

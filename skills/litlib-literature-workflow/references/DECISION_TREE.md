@@ -1,123 +1,129 @@
-# Acquisition Decision Tree
+# Edinme karar ağacı
 
-This reference separates observations that generalize from publisher-specific recipes.
-Apply each step only within the user's authorized access rights.
+Bu referans, genellenebilen gözlemleri yayıncıya özgü tariflerden ayırır. Her adımı yalnız
+kullanıcının yetkili erişim hakları içinde uygulayın.
 
-## 1. Establish the Target
+## 1. Hedefi belirleyin
 
-Prefer DOI, then PMID/PMCID/arXiv, then exact title. Normalize DOI URLs such as
-`https://doi.org/10.xxxx/...` before queueing. Record the source database and intended item
-type. A dataset, protocol chapter, correction, supplement, book chapter, and journal article
-can share publisher infrastructure but require different retrieval logic.
+Önce DOI, sonra PMID/PMCID/arXiv, sonra tam başlık tercih edin. Kuyruğa eklemeden önce
+`https://doi.org/10.xxxx/...` gibi DOI URL'lerini normalleştirin. Kaynak veritabanını ve
+amaçlanan öğe türünü kaydedin. Bir veri kümesi, protokol bölümü, düzeltme, ek materyal, kitap
+bölümü ve dergi makalesi aynı yayıncı altyapısını paylaşabilir ama farklı edinme mantığı
+gerektirir.
 
-Before downloading, answer:
+İndirmeden önce şu soruları yanıtlayın:
 
-- Is the target a paper PDF, HTML article, CAJ file, supplement, or dataset?
-- Is it OA, institution-entitled, purchase-only, or unknown?
-- Is the user on campus, off campus with CARSI, or using WebVPN?
-- Does the task already exist in LitLib or Zotero?
+- Hedef bir makale PDF'i mi, HTML makale mi, CAJ dosyası mı, ek materyal mi, veri kümesi mi?
+- OA mı, kurum yetkisiyle mi erişilebilir, yalnız satın alınabilir mi, bilinmiyor mu?
+- Kullanıcı kampüste mi, kampüs dışında CARSI ile mi, WebVPN ile mi?
+- Görev LitLib'de ya da Zotero'da zaten var mı?
 
-## 2. Try Routes in This Order
+## 2. Rotaları bu sırayla deneyin
 
-1. **OA discovery:** arXiv, MDPI public static candidate where recognized, Unpaywall,
-   Europe PMC, OpenAlex, then a Crossref link only when its license metadata proves OA.
-2. **Direct HTTP candidate:** use a known stable PDF endpoint only when authorization and
-   content type are appropriate.
-3. **Visible browser direct:** resolve DOI, inspect the rendered article page, and reuse the
-   user's current campus or authenticated publisher session.
-4. **WebVPN:** only when a valid JLU ticket and a publisher token already exist. A missing
-   token is a skipped route, not a reason to abort all later routes.
-5. **Institution login:** resolve the actual DOI landing host, select Jilin University in the
-   WAYF/CARSI federation, authenticate only on an allowlisted HTTPS JLU IdP, pause for the
-   user to review and manually decide terms/attribute release, return to the publisher, then
-   retry the PDF.
+1. **OA keşfi:** arXiv, tanınıyorsa MDPI public static adayı, Unpaywall, Europe PMC, OpenAlex;
+   sonra yalnız lisans metadata'sı OA olduğunu kanıtlıyorsa bir Crossref bağlantısı.
+2. **Doğrudan HTTP adayı:** bilinen kararlı bir PDF uç noktasını yalnız yetki ve içerik türü
+   uygunsa kullanın.
+3. **Görünür tarayıcıda doğrudan:** DOI'yi çözün, işlenmiş makale sayfasını inceleyin ve
+   kullanıcının mevcut kampüs ya da kimliği doğrulanmış yayıncı oturumunu yeniden kullanın.
+4. **WebVPN:** yalnız geçerli bir JLU bileti ve yayıncı token'ı zaten varsa. Eksik token,
+   atlanan bir rotadır; sonraki tüm rotaları iptal etmek için bir neden değildir.
+5. **Kurum girişi:** gerçek DOI açılış host'unu çözün, WAYF/CARSI federasyonunda Jilin
+   Üniversitesi'ni seçin, yalnız izin listesindeki bir HTTPS JLU IdP'sinde kimlik doğrulayın,
+   kullanıcının koşulları/öznitelik paylaşımını incelemesi ve elle karar vermesi için durun,
+   yayıncıya geri dönün, sonra PDF'i yeniden deneyin.
 
-Each candidate must be validated independently. A failed OA landing page must not block the
-next OA provider. A failed WebVPN route must not block a direct institution-login route.
+Her aday ayrı ayrı doğrulanmalıdır. Başarısız bir OA açılış sayfası sonraki OA sağlayıcısını
+engellememelidir. Başarısız bir WebVPN rotası doğrudan kurum girişi rotasını engellememelidir.
 
-## 3. Diagnose the Returned Object
+## 3. Dönen nesneyi teşhis edin
 
-Inspect in this order:
+Bu sırayla inceleyin:
 
-1. HTTP status and final URL.
-2. `Content-Type`, `Content-Length`, and `Content-Disposition`.
-3. First five bytes (`%PDF-`) and `%%EOF` near the tail.
-4. Parsed page count and extracted text.
-5. Expected DOI in the first three pages, a conflicting page-1 DOI, and supplement indicators.
+1. HTTP durumu ve son URL.
+2. `Content-Type`, `Content-Length` ve `Content-Disposition`.
+3. İlk beş bayt (`%PDF-`) ve sona yakın `%%EOF`.
+4. Ayrıştırılan sayfa sayısı ve çıkarılan metin.
+5. İlk üç sayfada beklenen DOI, 1. sayfada çakışan DOI ve ek materyal göstergeleri.
 
-Interpret common combinations:
+Yaygın birleşimleri şöyle yorumlayın:
 
-| Observation | Likely cause | Next action |
+| Gözlem | Olası neden | Sonraki adım |
 |---|---|---|
-| `200 text/html` from a PDF URL | Login page, anti-bot page, HTML viewer, or HTML-only entitlement | Inspect visible page and authentication state; do not save as PDF |
-| `206 application/pdf`, very small, zero pages | Viewer range fragment | Obtain the full resource through same-origin fetch, native download, or completed range assembly |
-| `%PDF-` but no `%%EOF` | Truncated transfer or partial response | Reject and retry another route |
-| Valid PDF but target DOI absent | Wrong paper, supplement, issue front matter, or extraction failure | Reject by default; inspect manually before any override |
-| One different DOI in first-page header | Wrong article | Reject immediately |
-| `403` direct but article visible in browser | Signed URL, origin/session requirement, or anti-bot policy | Fetch from the same page origin or trigger the publisher's native download |
-| `429` | Rate limit | Stop, cool down, and retain `RATE_LIMITED` state |
-| Purchase/rental text | No current entitlement | Stop and report purchase-only |
+| PDF URL'inden `200 text/html` | Giriş sayfası, anti-bot sayfası, HTML görüntüleyici ya da yalnız HTML yetkisi | Görünür sayfayı ve kimlik doğrulama durumunu inceleyin; PDF olarak kaydetmeyin |
+| `206 application/pdf`, çok küçük, sıfır sayfa | Görüntüleyicinin aralık parçası | Kaynağın tamamını aynı kökenli fetch, yerel indirme ya da tamamlanmış aralık birleştirmeyle alın |
+| `%PDF-` var ama `%%EOF` yok | Kesilmiş aktarım ya da kısmi yanıt | Reddedin, başka bir rota deneyin |
+| Geçerli PDF ama hedef DOI yok | Yanlış makale, ek materyal, sayının ön kısmı ya da çıkarma hatası | Varsayılan olarak reddedin; bir istisna yapmadan önce elle inceleyin |
+| İlk sayfa başlığında farklı bir DOI | Yanlış makale | Hemen reddedin |
+| Doğrudan `403` ama makale tarayıcıda görünüyor | İmzalı URL, köken/oturum gereksinimi ya da anti-bot politikası | Aynı sayfa kökeninden fetch edin ya da yayıncının yerel indirmesini tetikleyin |
+| `429` | Hız sınırı | Durun, soğumayı bekleyin, `RATE_LIMITED` durumunu koruyun |
+| Satın alma/kiralama metni | Güncel yetki yok | Durun ve yalnız satın alınabilir olarak raporlayın |
 
-## 4. Browser Escalation Ladder
+## 4. Tarayıcıya yükseltme basamakları
 
-When a browser is needed, use the least invasive method that preserves the authorized
-session:
+Tarayıcı gerektiğinde, yetkili oturumu koruyan en az müdahaleci yöntemi kullanın:
 
-1. Read `citation_pdf_url`, `dc.*`, JSON-LD, canonical URL, and visible PDF anchors.
-2. Navigate to the publisher's PDF viewer and inspect `performance.getEntriesByType('resource')`.
-3. Prefer browser-native download when it produces a complete file.
-4. Use a same-origin page-context `fetch` for a signed or session-bound PDF URL.
-5. Use CDP response bodies only after checking status and transfer semantics. A viewer often
-   requests byte ranges; `Network.getResponseBody` may return one fragment rather than the
-   complete PDF.
+1. `citation_pdf_url`, `dc.*`, JSON-LD, canonical URL ve görünür PDF bağlantılarını okuyun.
+2. Yayıncının PDF görüntüleyicisine gidin ve `performance.getEntriesByType('resource')`'u
+   inceleyin.
+3. Tam bir dosya üretiyorsa tarayıcının yerel indirmesini tercih edin.
+4. İmzalı ya da oturuma bağlı bir PDF URL'i için sayfa bağlamında aynı kökenli `fetch`
+   kullanın.
+5. CDP yanıt gövdelerini ancak durumu ve aktarım semantiğini kontrol ettikten sonra kullanın.
+   Görüntüleyiciler çoğu zaman bayt aralıkları ister; `Network.getResponseBody` PDF'in
+   tamamı yerine tek bir parça döndürebilir.
 
-Do not inject credentials into arbitrary third-party pages. Credentials may only be read
-from Windows Credential Manager and submitted to the expected JLU identity-provider host.
+Kimlik bilgilerini rastgele üçüncü taraf sayfalara enjekte etmeyin. Kimlik bilgileri yalnız
+Windows Credential Manager'dan okunabilir ve beklenen JLU kimlik sağlayıcısı host'una
+gönderilebilir.
 
-## 5. Authentication Decision
+## 5. Kimlik doğrulama kararı
 
-Distinguish four failures:
+Dört hatayı birbirinden ayırın:
 
-- **No publisher session:** click the institution-access entry and continue through WAYF.
-- **Human challenge:** wait in the visible browser. Do not loop automated retries.
-- **Unsupported SP:** the JLU IdP says the service/request is unsupported; stop CARSI for
-  that publisher and report campus-IP/WebVPN alternatives.
-- **Authenticated but no PDF entitlement:** article HTML may be readable while PDF remains
-  purchase-only. Treat entitlement separately from successful login.
+- **Yayıncı oturumu yok:** kurum erişimi bağlantısına tıklayın ve WAYF üzerinden devam edin.
+- **İnsan doğrulaması:** görünür tarayıcıda bekleyin. Otomatik yeniden deneme döngüsüne
+  girmeyin.
+- **Desteklenmeyen SP:** JLU IdP servisin/isteğin desteklenmediğini söylüyor; o yayıncı için
+  CARSI'yi bırakın ve kampüs IP'si/WebVPN alternatiflerini raporlayın.
+- **Kimliği doğrulanmış ama PDF yetkisi yok:** makale HTML'i okunabilirken PDF yalnız satın
+  alınabilir kalabilir. Yetkiyi başarılı girişten ayrı değerlendirin.
 
-After authentication, reload or revisit the article. Some publishers do not update access
-metadata in the already-open document.
+Kimlik doğrulamasından sonra makaleyi yeniden yükleyin ya da tekrar ziyaret edin. Bazı
+yayıncılar zaten açık belgede erişim metadata'sını güncellemez.
 
-## 6. Generalizing to a New Publisher
+## 6. Yeni bir yayıncıya genelleme
 
-For an unknown host, do not immediately add a hard-coded DOI-prefix route. Collect:
+Bilinmeyen bir host için hemen sabit kodlu bir DOI öneki rotası eklemeyin. Şunları toplayın:
 
-- DOI prefix and actual redirect host.
-- Article type and OA/license metadata.
-- Stable page metadata/DOM selector for the PDF action.
-- Whether the PDF URL is same-origin, signed, short-lived, or a CDN URL.
-- Whether direct HTTP, native navigation, same-origin fetch, or institution login worked.
-- Challenge, rate-limit, and purchase-only indicators.
-- A complete validated PDF from a user-authorized session.
+- DOI öneki ve gerçek yönlendirme host'u.
+- Makale türü ve OA/lisans metadata'sı.
+- PDF işlemi için kararlı sayfa metadata'sı/DOM seçicisi.
+- PDF URL'inin aynı kökenli mi, imzalı mı, kısa ömürlü mü, CDN URL'i mi olduğu.
+- Doğrudan HTTP'nin, yerel gezinmenin, aynı kökenli fetch'in ya da kurum girişinin işe yarayıp
+  yaramadığı.
+- Doğrulama, hız sınırı ve yalnız satın alma göstergeleri.
+- Kullanıcı yetkili bir oturumdan alınmış, tam ve doğrulanmış bir PDF.
 
-Then implement the smallest adapter and a fixture-based test. Keep host detection separate
-from DOI-prefix detection because publishers acquire journals and redirect hosts change.
+Sonra en küçük adaptörü ve fixture tabanlı bir testi yazın. Host algılamayı DOI öneki
+algılamasından ayrı tutun; çünkü yayıncılar dergi satın alır ve yönlendirme host'ları değişir.
 
-Useful inferred attempts, in order:
+Yararlı çıkarım denemeleri, sırasıyla:
 
-1. Resolve DOI and inspect standards-based metadata.
-2. Inspect a visible PDF link and its target after a click.
-3. Look for a signed PDF resource in the performance timeline.
-4. Compare a successful browser request with the failing direct request: origin, referer,
-   cookies, method, status, range semantics, and redirect chain.
-5. Check whether the item is HTML-only or a non-article content type before writing code.
+1. DOI'yi çözün ve standartlara dayalı metadata'yı inceleyin.
+2. Görünür bir PDF bağlantısını ve tıklamadan sonraki hedefini inceleyin.
+3. Performans zaman çizelgesinde imzalı bir PDF kaynağı arayın.
+4. Başarılı bir tarayıcı isteğini başarısız doğrudan istekle karşılaştırın: köken, referer,
+   çerezler, yöntem, durum, aralık semantiği ve yönlendirme zinciri.
+5. Kod yazmadan önce öğenin yalnız HTML mi yoksa makale dışı bir içerik türü mü olduğunu
+   kontrol edin.
 
-Never generalize a workaround from one DOI until at least one additional article on the
-same platform is checked. Record unconfirmed routes as `inferred`, not `verified`.
+Aynı platformda en az bir makale daha kontrol edilmeden tek bir DOI'den geçici çözümü
+genellemeyin. Doğrulanmamış rotaları `verified` değil, `inferred` olarak kaydedin.
 
-## 7. Recovery and Delivery
+## 7. Kurtarma ve teslim
 
-After a crash:
+Bir çökmeden sonra:
 
 ```powershell
 litlib queue recover
@@ -125,15 +131,16 @@ litlib queue recover --failed
 litlib queue recover --paused
 ```
 
-Use `--failed` only after the root cause was corrected and retry limits permit it. Use
-`--paused` only after a human challenge or cooldown is complete.
+`--failed`'i yalnız kök neden düzeltildikten ve deneme sınırları izin veriyorsa kullanın.
+`--paused`'ı yalnız insan doğrulaması ya da soğuma tamamlandıktan sonra kullanın.
 
-Before delivery:
+Teslimden önce:
 
 ```powershell
 litlib verify
 litlib status --verbose
 ```
 
-A PDF on disk without a task file record is a recovery artifact, not a completed download.
-An RIS file without a verified Zotero parent item and PDF attachment is not `IMPORTED`.
+Görev dosya kaydı olmayan, diskteki bir PDF kurtarma dosyasıdır; tamamlanmış bir indirme
+değildir. Doğrulanmış bir Zotero parent item'ı ve PDF eki olmayan bir RIS dosyası `IMPORTED`
+değildir.

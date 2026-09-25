@@ -1,13 +1,13 @@
-"""Bezmialem Vakif University (BVU) off-campus access via Palo Alto GlobalProtect VPN.
+"""Palo Alto GlobalProtect VPN ile Bezmialem Vakıf Üniversitesi'ne (BVU) kampüs dışı erişim.
 
-GlobalProtect is IP-based: while connected, publishers see a campus address, so the
-generic direct routes (direct-httpx / direct-browser) are sufficient. There is no URL
-rewriting gateway and no IdP form, so LitLib never handles a BVU password.
+GlobalProtect IP tabanlıdır: bağlıyken yayıncılar bir kampüs adresi görür, bu yüzden
+genel doğrudan rotalar (direct-httpx / direct-browser) yeterlidir. URL yeniden yazan bir
+ağ geçidi ya da IdP formu yoktur; LitLib hiçbir zaman BVU parolasıyla uğraşmaz.
 
-Preflight evidence comes from the publisher side, not from the local VPN client: a
-GlobalProtect process can be running while disconnected, and split tunnelling can leave
-publisher traffic outside the tunnel. LITLIB_BVU_PROBE_URL should point at a page of a
-BVU-subscribed article whose HTML names the institution when access is recognised.
+Ön kontrol kanıtı yerel VPN istemcisinden değil yayıncı tarafından gelir: GlobalProtect
+süreci bağlantı kopukken de çalışıyor olabilir, bölünmüş tünelleme de yayıncı trafiğini
+tünelin dışında bırakabilir. LITLIB_BVU_PROBE_URL, BVU'nun abone olduğu ve erişim
+tanındığında HTML'inde kurumun adı geçen bir makale sayfasını göstermelidir.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ def access_pattern() -> re.Pattern[str]:
 
 
 def detect_institutional_access(html: str) -> str:
-    """Return a short evidence snippet if the page attributes access to BVU, else ''."""
+    """Sayfa erişimi BVU'ya bağlıyorsa kısa bir kanıt parçası, değilse '' döndürür."""
     text = re.sub(r"\s+", " ", re.sub(r"<!--.*?-->|<[^>]+>", " ", html, flags=re.S))
     match = access_pattern().search(text)
     if not match:
@@ -50,15 +50,15 @@ def detect_institutional_access(html: str) -> str:
 
 
 def is_bot_challenge(status: int, html: str) -> bool:
-    """httpx was stopped by an anti-bot wall (e.g. Cloudflare), not told 'no access'."""
+    """httpx 'erişim yok' yanıtı almadı, bir anti-bot duvarına (örn. Cloudflare) takıldı."""
     return status in BROWSER_FALLBACK_STATUSES or bool(CHALLENGE_MARKERS.search(html[:20000]))
 
 
 async def browser_probe(url: str) -> tuple[bool, str]:
-    """Open the probe page in the already-running dedicated Chrome and look for BVU access.
+    """Deneme sayfasını zaten çalışan özel Chrome'da açar ve BVU erişimini arar.
 
-    Challenges are never solved automatically: the upstream human wait is reused and, on
-    timeout, the tab stays open for the user.
+    Doğrulamalar asla otomatik çözülmez: upstream'deki insan bekleme adımı yeniden kullanılır,
+    zaman aşımında sekme kullanıcı için açık bırakılır.
     """
     try:
         await chrome_cdp.wait_for_cdp(timeout=5)
@@ -94,7 +94,7 @@ async def browser_probe(url: str) -> tuple[bool, str]:
 
 
 async def vpn_preflight(client: httpx.AsyncClient) -> tuple[bool, str]:
-    """Check that the publisher recognises BVU access before spending batch attempts."""
+    """Parti denemeleri harcanmadan önce yayıncının BVU erişimini tanıdığını kontrol eder."""
     url = os.environ.get("LITLIB_BVU_PROBE_URL", "").strip()
     if not url:
         return False, "LITLIB_BVU_PROBE_URL is not set; cannot verify GlobalProtect access"
