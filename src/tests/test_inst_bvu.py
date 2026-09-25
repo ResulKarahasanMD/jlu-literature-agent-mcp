@@ -87,6 +87,10 @@ def test_access_attribution_detected_in_fixture():
     "<a>BEZMI ALEM VAKIF UNIVERSITY</a>",                                                      # RSC
     "<div>Access provided by: Bezm-i Alem Universitesi</div>",                                 # IEEE
     "<p>Bezm-i Alem Vakıf Üniversitesi aboneliğiyle bağlanıyorsunuz</p>",                      # Turcademy
+    "<span>BEZMIALEM VAKIF UNIV</span>",                              # ACS
+    "<span>Bezm-i Alem Vakif Univer...</span>",                       # JoVE
+    "<div>Access provided by: Bezm-i Alem Vakif Universitesi</div>",  # Annual Reviews
+    "<div>BEZMİALEM VAKIF UNIVERSITY | Aranıyor: MEDLINE</div>",      # EBSCOhost
 ])
 def test_access_pattern_matches_publisher_spellings(monkeypatch, snippet):
     monkeypatch.delenv("LITLIB_BVU_ACCESS_PATTERN", raising=False)
@@ -101,6 +105,25 @@ def test_access_pattern_matches_publisher_spellings(monkeypatch, snippet):
 def test_access_pattern_rejects_non_bvu(monkeypatch, snippet):
     monkeypatch.delenv("LITLIB_BVU_ACCESS_PATTERN", raising=False)
     assert bvu.detect_institutional_access(snippet) == ""
+
+
+# Aynı yazımlar, yayıncı sayfa başlığını taklit eden fixture'larla (src/tests/fixtures/bvu/):
+# dönen kanıt parçası kurum adını tam içermeli ve etiket kalıntısı taşımamalı.
+@pytest.mark.parametrize(("fixture", "rendered_name"), [
+    ("wiley_access.html", "Bezm-I Alem Vakif University"),       # Wiley, Cochrane
+    ("tandfonline_access.html", "Bezmi Alem Vakif University"),  # Taylor & Francis
+    ("ieee_access.html", "Bezm-i Alem Universitesi"),            # IEEE Xplore, ProQuest
+])
+def test_publisher_fixture_pages_yield_readable_evidence(monkeypatch, fixture, rendered_name):
+    monkeypatch.delenv("LITLIB_BVU_ACCESS_PATTERN", raising=False)
+    evidence = bvu.detect_institutional_access(_fixture(fixture))
+    assert rendered_name in evidence
+    assert "<" not in evidence
+
+
+def test_jstor_ekual_page_is_not_bvu_evidence(monkeypatch):
+    monkeypatch.delenv("LITLIB_BVU_ACCESS_PATTERN", raising=False)
+    assert bvu.detect_institutional_access(_fixture("jstor_ekual.html")) == ""
 
 
 # ---- geçici DNS/bağlantı hatalarında yeniden deneme ---------------------------------

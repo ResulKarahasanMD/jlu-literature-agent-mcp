@@ -123,9 +123,12 @@ LITLIB_INSTITUTION=bvu
 LITLIB_BVU_PROBE_URL=https://doi.org/<BVU'nun abone olduğu bir makale>
 ```
 
-Her partiden önce deneme sayfasında erişim sağlayıcı olarak Bezmialem geçmelidir (önce
-httpx; 403/503 ya da anti-bot sayfasında, olağan insan beklemesiyle birlikte zaten açık olan
-özel Chrome). Geçmezse parti durur ve görevler `REQUIRES_INST` durumunda kalır.
+Her partiden önce deneme sayfasında erişim sağlayıcı olarak kurum adı geçmelidir; yayıncılar
+bunu "Bezmialem", "Bezm-i Alem" ya da "Bezmi Alem" diye yazar ve varsayılan kalıp üçünü de
+tanır (`LITLIB_BVU_ACCESS_PATTERN` ile değiştirilebilir; JSTOR'daki "EKUAL" bir konsorsiyum
+adıdır, kurum kanıtı sayılmaz). Kontrol önce httpx ile yapılır; 403/503 ya da anti-bot
+sayfasında, olağan insan beklemesiyle birlikte zaten açık olan özel Chrome kullanılır.
+Geçmezse parti durur ve görevler `REQUIRES_INST` durumunda kalır.
 
 Canlı kontrol, 2026-09-19, kampüs dışında GlobalProtect ile (`litlib run --stage inst
 --access-mode campus`):
