@@ -79,6 +79,149 @@ def test_access_attribution_detected_in_fixture():
     assert bvu.detect_institutional_access(_fixture("sciencedirect_no_access.html")) == ""
 
 
+# 2026-09-25 canlı taramada yayıncı sayfalarından alınan gerçek kurum adı yazımları.
+@pytest.mark.parametrize("snippet", [
+    "<div>You have full access to this article via Bezmialem Foundation University.</div>",  # Nature
+    "<span>Access By</span><span>Bezm-I Alem Vakif University</span>",                       # Wiley
+    "<p>Access provided by<strong> Bezmi Alem Vakif University</strong></p>",                  # T&F
+    "<a>BEZMI ALEM VAKIF UNIVERSITY</a>",                                                      # RSC
+    "<div>Access provided by: Bezm-i Alem Universitesi</div>",                                 # IEEE
+    "<p>Bezm-i Alem Vakıf Üniversitesi aboneliğiyle bağlanıyorsunuz</p>",                      # Turcademy
+])
+def test_access_pattern_matches_publisher_spellings(monkeypatch, snippet):
+    monkeypatch.delenv("LITLIB_BVU_ACCESS_PATTERN", raising=False)
+    assert bvu.detect_institutional_access(snippet)
+
+
+@pytest.mark.parametrize("snippet", [
+    "<div>Access provided by EKUAL</div>",                  # JSTOR: konsorsiyum adı, kurum kanıtı değil
+    "<div>Access provided by Bezirgan University</div>",
+    "<div>Purchase PDF · Get access</div>",
+])
+def test_access_pattern_rejects_non_bvu(monkeypatch, snippet):
+    monkeypatch.delenv("LITLIB_BVU_ACCESS_PATTERN", raising=False)
+    assert bvu.detect_institutional_access(snippet) == ""
+
+
+# ---- geçici DNS/bağlantı hatalarında yeniden deneme ---------------------------------
+
+def _flaky_client(failures: list[Exception], body: str, calls: list[int]) -> httpx.AsyncClient:
+    """İlk len(failures) istekte sırayla o hataları fırlatır, sonra 200 döner."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        if failures:
+            raise failures.pop(0)
+        return httpx.Response(200, text=body)
+    return httpx.AsyncClient(transport=httpx.MockTransport(handler))
+
+
+@pytest.fixture()
+def no_sleep(monkeypatch):
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+    monkeypatch.setattr(bvu.asyncio, "sleep", fake_sleep)
+    return sleeps
+
+
+@pytest.mark.asyncio
+async def test_preflight_retries_transient_dns_error(monkeypatch, no_sleep):
+    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
+    calls: list[int] = []
+    errors = [httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known"),
+              httpx.ConnectTimeout("timed out")]
+    async with _flaky_client(errors, _fixture("sciencedirect_access.html"), calls) as client:
+        ok, evidence = await bvu.vpn_preflight(client)
+    assert ok and "Bezmialem" in evidence
+    assert len(calls) == 3
+    assert no_sleep == [bvu.RETRY_BACKOFF_SECONDS * 1, bvu.RETRY_BACKOFF_SECONDS * 2]
+
+
+@pytest.mark.asyncio
+async def test_preflight_gives_up_after_bounded_retries(monkeypatch, no_sleep):
+    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
+    calls: list[int] = []
+    errors = [httpx.ConnectError("dns") for _ in range(bvu.TRANSIENT_RETRIES + 2)]
+    async with _flaky_client(errors, "", calls) as client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert ok is False and reason == "probe request failed: ConnectError"
+    assert len(calls) == bvu.TRANSIENT_RETRIES
+
+
+@pytest.mark.asyncio
+async def test_preflight_does_not_retry_certificate_errors(monkeypatch, no_sleep):
+    import ssl
+    monkeypatch.setenv("LITLIB_BVU_PROBE_URL", PROBE_URL)
+    calls: list[int] = []
+    exc = httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed")
+    exc.__cause__ = ssl.SSLCertVerificationError("certificate verify failed")
+    async with _flaky_client([exc], _fixture("sciencedirect_access.html"), calls) as client:
+        ok, reason = await bvu.vpn_preflight(client)
+    assert ok is False and reason == "probe request failed: ConnectError"
+    assert len(calls) == 1 and no_sleep == []
+
+
+def test_transient_classification():
+    assert bvu.is_transient_transport_error(httpx.ConnectError("[Errno 8] nodename nor servname"))
+    assert bvu.is_transient_transport_error(httpx.ReadTimeout("slow"))
+    assert not bvu.is_transient_transport_error(httpx.ConnectError("CERTIFICATE_VERIFY_FAILED"))
+    assert not bvu.is_transient_transport_error(httpx.HTTPStatusError(
+        "403", request=httpx.Request("GET", PROBE_URL), response=httpx.Response(403)))
+
+
+@pytest.mark.asyncio
+async def test_download_retries_before_first_byte(monkeypatch, tmp_path):
+    from litlib import download
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+    monkeypatch.setattr(download.asyncio, "sleep", fake_sleep)
+    calls: list[int] = []
+    body = "%PDF-1.4 test"
+    async with _flaky_client([httpx.ConnectError("[Errno 8] nodename nor servname")], body, calls) as client:
+        dest, digest, size = await download.download_to_file(client, PROBE_URL, tmp_path / "a.pdf")
+    assert dest.read_text() == body and size == len(body) and len(digest) == 64
+    assert len(calls) == 2 and sleeps == [download.RETRY_BACKOFF_SECONDS]
+    assert not (tmp_path / "a.pdf.part").exists()
+
+
+@pytest.mark.asyncio
+async def test_download_does_not_retry_after_bytes_received(monkeypatch, tmp_path):
+    from litlib import download
+    monkeypatch.setattr(download.asyncio, "sleep", pytest.fail)  # uyku = yeniden deneme = hata
+    calls: list[int] = []
+
+    async def broken_body():
+        yield b"%PDF-1.4 partial"
+        raise httpx.ReadError("connection reset")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(200, stream=_AsyncGenStream(broken_body()))
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(httpx.ReadError):
+            await download.download_to_file(client, PROBE_URL, tmp_path / "b.pdf")
+    assert len(calls) == 1
+    assert not (tmp_path / "b.pdf.part").exists()
+
+
+class _AsyncGenStream(httpx.AsyncByteStream):
+    def __init__(self, gen):
+        self._gen = gen
+
+    async def __aiter__(self):
+        async for chunk in self._gen:
+            yield chunk
+
+
+def test_access_pattern_env_override(monkeypatch):
+    monkeypatch.setenv("LITLIB_BVU_ACCESS_PATTERN", "Ornek Universitesi")
+    assert bvu.detect_institutional_access("<p>Access via Ornek Universitesi</p>")
+    assert bvu.detect_institutional_access("<p>Bezmialem Vakif University</p>") == ""
+
+
 @pytest.mark.asyncio
 async def test_preflight_requires_probe_url(monkeypatch):
     monkeypatch.delenv("LITLIB_BVU_PROBE_URL", raising=False)

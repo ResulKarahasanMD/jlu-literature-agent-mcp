@@ -13,21 +13,63 @@ tanındığında HTML'inde kurumun adı geçen bir makale sayfasını göstermel
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
+import ssl
 
 import httpx
 
 from litlib import chrome_cdp
 
+log = logging.getLogger(__name__)
+
 INSTITUTION = "bvu"
-DEFAULT_ACCESS_PATTERN = r"Bezmialem"
+# GlobalProtect'in DNS sunucusu (2026-09-25 taramasında 10.100.4.211) aralıklı yanıt vermiyor:
+# ilk denemelerin ~1/3'ü "nodename nor servname provided" ile düşüp 3-5 s sonra çözülüyor.
+# Yalnız taşıma hataları (DNS, bağlantı, zaman aşımı) yeniden denenir; HTTP durum kodları
+# ve sertifika hataları asla.
+TRANSIENT_RETRIES = 4
+RETRY_BACKOFF_SECONDS = 3.0
+# Yayıncılar kurum adını farklı yazıyor (2026-09-25 canlı tarama, out_20260925_dbcheck/):
+# "Bezmialem" (Nature, ScienceDirect, Scopus, Karger, Emerald, ACS), "Bezm-i Alem" /
+# "Bezm-I Alem" (Wiley, IEEE, JoVE, Cochrane, ProQuest, Turcademy, Lexiqamus, Annual Reviews),
+# "Bezmi Alem" / "BEZMI ALEM" (Taylor & Francis, RSC). JSTOR'daki "EKUAL" konsorsiyum adıdır,
+# kurum kanıtı sayılmaz. Eşleşme zaten büyük/küçük harfe duyarsız (access_pattern).
+DEFAULT_ACCESS_PATTERN = r"Bezm[-\s]?i[-\s]?alem"
 BROWSER_FALLBACK_STATUSES = {403, 503}
 CHALLENGE_MARKERS = re.compile(
     r"just a moment|cf-chl|challenge-platform|cf-turnstile|captcha|are you a robot", re.I)
 PAGE_SETTLE_SECONDS = 4
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
+
+
+def is_transient_transport_error(exc: BaseException) -> bool:
+    """DNS/bağlantı/zaman aşımı → True; sertifika doğrulama hatası (zincirde ssl.SSLError) → False."""
+    if not isinstance(exc, httpx.TransportError):
+        return False
+    cause: BaseException | None = exc
+    while cause is not None:
+        if isinstance(cause, ssl.SSLError):
+            return False
+        cause = cause.__cause__ or cause.__context__
+    return "CERTIFICATE" not in str(exc).upper()
+
+
+async def get_with_transient_retry(client: httpx.AsyncClient, url: str, **kwargs) -> httpx.Response:
+    """client.get'i geçici taşıma hatalarında sınırlı sayıda, artan aralıkla yineler."""
+    for attempt in range(1, TRANSIENT_RETRIES + 1):
+        try:
+            return await client.get(url, **kwargs)
+        except httpx.TransportError as exc:
+            if attempt == TRANSIENT_RETRIES or not is_transient_transport_error(exc):
+                raise
+            delay = RETRY_BACKOFF_SECONDS * attempt
+            log.warning("geçici ağ hatası (%s) %s — %d/%d, %.0fs sonra yeniden",
+                        type(exc).__name__, url, attempt, TRANSIENT_RETRIES, delay)
+            await asyncio.sleep(delay)
+    raise AssertionError("unreachable")
 
 
 def is_active() -> bool:
@@ -99,8 +141,8 @@ async def vpn_preflight(client: httpx.AsyncClient) -> tuple[bool, str]:
     if not url:
         return False, "LITLIB_BVU_PROBE_URL is not set; cannot verify GlobalProtect access"
     try:
-        resp = await client.get(url, headers={"User-Agent": UA}, follow_redirects=True,
-                                timeout=30)
+        resp = await get_with_transient_retry(client, url, headers={"User-Agent": UA},
+                                              follow_redirects=True, timeout=30)
     except httpx.HTTPError as exc:
         return False, f"probe request failed: {type(exc).__name__}"
     if resp.status_code == 429:
