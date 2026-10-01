@@ -1,4 +1,4 @@
-"""按需全文：Zotero 附件 → 分页全文，带缓存（§16, §27.9）。"""
+"""İsteğe bağlı tam metin: Zotero eki → sayfalı tam metin, önbellekli (§16, §27.9)."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def _load_cache(cp: Path) -> str | None:
 
 def get_fulltext(pdf_path: Path, attachment_key: str, offset: int = 0,
                  limit_chars: int = DEFAULT_LIMIT_CHARS, *, cache: bool = True) -> dict:
-    """返回 {total_chars, offset, limit_chars, text, from_cache}。"""
+    """{total_chars, offset, limit_chars, text, from_cache} döndürür."""
     limit_chars = max(1, min(limit_chars, MAX_LIMIT_CHARS))
     sha = sha256_of_file(pdf_path) if cache else ""
     cp = cache_path(attachment_key, sha) if cache else None
@@ -43,7 +43,7 @@ def get_fulltext(pdf_path: Path, attachment_key: str, offset: int = 0,
     if text is None:
         n_pages, n_chars = validate_pdf(pdf_path)
         if n_chars == 0:
-            raise PDFError("PDF 无文本层（需 OCR，Phase 7）")
+            raise PDFError("PDF'te metin katmanı yok (OCR gerekir, Phase 7)")
         from pypdf import PdfReader
 
         parts: list[str] = []

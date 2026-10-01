@@ -1,4 +1,4 @@
-"""阶段流水线：fetch-metadata / oa，驱动任务状态机。"""
+"""Aşama hattı: fetch-metadata / oa; görev durum makinesini ilerletir."""
 
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ async def run_metadata(st: State, limit: int = 100) -> dict:
                     logger.warning("metadata failed task=%s %s", task["id"], e)
                     return False
                 if not resolved.title:
-                    st.set_state(task["id"], TaskState.FAILED, error="未解析出元数据")
+                    st.set_state(task["id"], TaskState.FAILED, error="metadata çözümlenemedi")
                     return False
                 try:
                     st.update_work(resolved)
@@ -106,7 +106,7 @@ async def run_oa(st: State, limit: int = 100) -> dict:
                     return
                 if not candidates:
                     st.set_state(task["id"], TaskState.REQUIRES_INST,
-                                 error="所有 OA 通道均未命中")
+                                 error="hiçbir OA kanalı sonuç vermedi")
                     stats["requires_inst"] += 1
                     return
                 errors: list[str] = []
@@ -145,7 +145,7 @@ async def run_oa(st: State, limit: int = 100) -> dict:
                         stats["failed"] += 1
                     return
                 st.set_state(task["id"], TaskState.REQUIRES_INST,
-                             error="OA 候选均失败: " + " | ".join(errors)[:800])
+                             error="tüm OA adayları başarısız: " + " | ".join(errors)[:800])
                 stats["requires_inst"] += 1
 
         await asyncio.gather(*(one(t) for t in tasks))

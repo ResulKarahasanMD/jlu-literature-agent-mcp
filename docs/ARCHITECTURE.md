@@ -1,85 +1,89 @@
-# 最终架构：一个 skill + 两个 MCP
+# Nihai mimari: bir skill + iki MCP
 
-## 组件边界
+## Bileşen sınırları
 
 ```text
-                         academic database tools
-                                  |
-                                  v
-User request --> litlib-literature-workflow skill
-                   |          |            |
-                   |          |            +--> ZotSeek MCP (semantic recall)
-                   |          +---------------> LitLib MCP (exact local reads)
-                   +--------------------------> litlib CLI (all mutations)
-                                                        |
-             metadata APIs / OA / JLU browser ----------+
-                                                        v
-                  task SQLite + verified PDFs --> RIS --> Zotero
-                                                        |
-                                                        +--> ZotSeek local index
+                        akademik veritabanı araçları
+                                   |
+                                   v
+Kullanıcı isteği --> litlib-literature-workflow skill
+                    |          |            |
+                    |          |            +--> ZotSeek MCP (semantik hatırlama)
+                    |          +---------------> LitLib MCP (tam, yerel okumalar)
+                    +--------------------------> litlib CLI (tüm değişiklikler)
+                                                         |
+        metadata API'leri / OA / JLU tarayıcısı ---------+
+                                                         v
+             görev SQLite + doğrulanmış PDF'ler --> RIS --> Zotero
+                                                         |
+                                                         +--> ZotSeek yerel indeksi
 ```
 
 ### Skill
 
-`skills/litlib-literature-workflow/` is the portable Agent policy package. It contains:
+`skills/litlib-literature-workflow/`, taşınabilir Agent politika paketidir. İçeriği:
 
-- `SKILL.md`: triggers, routing, compliance, success contracts, human checkpoints.
-- `references/DECISION_TREE.md`: generalized failure diagnosis and new-site exploration.
-- `references/SITE_RECIPES.md`: dated, evidence-labelled publisher observations.
-- `references/CLIENT_SETUP.md`: clone, Zotero, ZotSeek, MCP, and skill installation.
+- `SKILL.md`: tetikleyiciler, yönlendirme, uyum, başarı sözleşmeleri, insan checkpoint'leri.
+- `references/DECISION_TREE.md`: genelleştirilmiş arıza teşhisi ve yeni site keşfi.
+- `references/SITE_RECIPES.md`: tarihli, kanıt etiketli yayıncı gözlemleri.
+- `references/CLIENT_SETUP.md`: klonlama, Zotero, ZotSeek, MCP ve skill kurulumu.
 
-The skill does not execute by itself and does not replace a scholarly search database. It
-orchestrates the Agent's academic search capability, LitLib CLI, and both MCP servers.
+Skill kendi başına bir şey çalıştırmaz ve akademik arama veritabanının yerini tutmaz.
+Agent'ın akademik arama yeteneğini, LitLib CLI'ı ve iki MCP sunucusunu yönetir.
 
 ### LitLib MCP
 
-Project-owned stdio server: `litlib mcp`.
+Projenin kendi stdio sunucusu: `litlib mcp`.
 
-- Exact/local metadata search across Zotero Local API and the LitLib task database.
-- PDF path resolution with ambiguity detection.
-- Paged PDF text extraction.
-- Zotero collection and task-state reads.
-- Opens SQLite with `mode=ro` and `PRAGMA query_only=ON`.
-- Does not initialize schema, create logs, write full-text cache, mutate tasks, or write Zotero.
+- Zotero Local API ve LitLib görev veritabanında tam/yerel metadata araması.
+- Belirsizlik algılamalı PDF yolu çözümleme.
+- Sayfalı PDF metni çıkarma.
+- Zotero koleksiyonlarını ve görev durumlarını okuma.
+- SQLite'ı `mode=ro` ve `PRAGMA query_only=ON` ile açar.
+- Şema başlatmaz, günlük oluşturmaz, tam metin önbelleği yazmaz, görevleri değiştirmez,
+  Zotero'ya yazmaz.
 
 ### ZotSeek MCP
 
-External Zotero-plugin HTTP server: `http://127.0.0.1:23119/zotseek/mcp`.
+Harici Zotero eklentisinin HTTP sunucusu: `http://127.0.0.1:23119/zotseek/mcp`.
 
-- Semantic, hybrid, and keyword retrieval over the active model's local index.
-- Index coverage/status and similar-paper lookup.
-- MCP calls are read-only; the ZotSeek plugin can separately auto-index Zotero changes when
-  that setting is enabled.
-- ZotSeek is installed from upstream and is not redistributed in this repository.
+- Etkin modelin yerel indeksi üzerinde semantik, hibrit ve anahtar sözcük araması.
+- İndeks kapsamı/durumu ve benzer makale sorgusu.
+- MCP çağrıları salt-okurdur; ayar açıksa ZotSeek eklentisi Zotero değişikliklerini ayrıca
+  otomatik indeksleyebilir.
+- ZotSeek upstream'den kurulur, bu depoda yeniden dağıtılmaz.
 
-## Mutation Matrix
+## Değişiklik matrisi
 
-| Operation | Skill | LitLib MCP | ZotSeek MCP | LitLib CLI / human |
+| İşlem | Skill | LitLib MCP | ZotSeek MCP | LitLib CLI / insan |
 |---|---:|---:|---:|---:|
-| Search existing metadata | routes | yes | keyword part | optional |
-| Semantic library search | routes | no | yes | no |
-| Download PDF | routes | no | no | CLI |
-| Change task state | routes | no | no | CLI |
-| Generate RIS | routes | no | no | CLI |
-| Import into Zotero | checkpoint | no | no | human Zotero action |
-| Confirm `IMPORTED` | routes | no | no | CLI `import --lookup` |
-| Build embeddings | checkpoint | no | status only | ZotSeek plugin UI |
+| Mevcut metadata'yı arama | yönlendirir | evet | anahtar sözcük kısmı | isteğe bağlı |
+| Kütüphanede semantik arama | yönlendirir | hayır | evet | hayır |
+| PDF indirme | yönlendirir | hayır | hayır | CLI |
+| Görev durumunu değiştirme | yönlendirir | hayır | hayır | CLI |
+| RIS üretme | yönlendirir | hayır | hayır | CLI |
+| Zotero'ya aktarma | checkpoint | hayır | hayır | insanın Zotero işlemi |
+| `IMPORTED` onayı | yönlendirir | hayır | hayır | CLI `import --lookup` |
+| Embedding oluşturma | checkpoint | hayır | yalnız durum | ZotSeek eklenti arayüzü |
 
-## Data Flow and Trust Boundaries
+## Veri akışı ve güven sınırları
 
-1. Identifiers come from academic databases or user input.
-2. SQLite stores workflow state and route audit, not full paper text.
-3. PDFs are accepted only after header, EOF, page, DOI, supplement, and SHA-256 checks.
-4. RIS import is intentionally human-gated.
-5. Zotero is the bibliographic source of truth. LitLib never edits `zotero.sqlite`.
-6. ZotSeek maintains its own `zotseek.sqlite`; it is a derived local index, not the master
-   library.
+1. Tanımlayıcılar akademik veritabanlarından ya da kullanıcı girdisinden gelir.
+2. SQLite, makalelerin tam metnini değil, iş akışı durumunu ve rota denetimini saklar.
+3. PDF'ler yalnız başlık, EOF, sayfa, DOI, ek materyal ve SHA-256 kontrollerinden sonra kabul
+   edilir.
+4. RIS içe aktarma bilerek insan onayına bağlanmıştır.
+5. Bibliyografik doğruluğun kaynağı Zotero'dur. LitLib `zotero.sqlite` dosyasını asla
+   düzenlemez.
+6. ZotSeek kendi `zotseek.sqlite` dosyasını tutar; bu türetilmiş bir yerel indekstir, ana
+   kütüphane değildir.
 
-Credentials live in Windows Credential Manager. Browser cookies remain in the dedicated
-Chrome profile; optional cookie export is off by default and, if explicitly enabled, uses a
-DPAPI-encrypted file. CAPTCHA/Turnstile/slider/OTP handling is always human.
+Kimlik bilgileri Windows Credential Manager'da durur. Tarayıcı çerezleri özel Chrome
+profilinde kalır; isteğe bağlı çerez dışa aktarımı varsayılan olarak kapalıdır, açıkça
+açılırsa DPAPI ile şifreli bir dosya kullanır. CAPTCHA/Turnstile/kaydırıcı/OTP her zaman
+insan tarafından çözülür.
 
-## State Contract
+## Durum sözleşmesi
 
 ```text
 QUEUED -> METADATA_FETCH -> DEDUPED
@@ -89,16 +93,17 @@ QUEUED -> METADATA_FETCH -> DEDUPED
 
 READY -> PROPOSAL_GENERATED -> USER_REVIEWED -> IMPORTED
 
-DOWNLOADING/VERIFYING -> PAYWALLED (explicit purchase-only terminal outcome)
+DOWNLOADING/VERIFYING -> PAYWALLED (açıkça yalnız satın alma; kesin son durum)
 ```
 
-`IMPORTED` is not a user assertion. It requires one exact Zotero parent item, a non-empty
-item key, and a resolvable PDF attachment. Human challenges and rate limits use
-`HUMAN_REQUIRED` and `RATE_LIMITED`, then explicit `queue recover --paused`.
+`IMPORTED` bir kullanıcı beyanı değildir. Tek bir tam eşleşen Zotero parent item'ı, boş
+olmayan item key ve çözümlenebilir bir PDF eki gerektirir. İnsan doğrulamaları ve hız
+sınırları `HUMAN_REQUIRED` ve `RATE_LIMITED` durumlarını kullanır, ardından açıkça
+`queue recover --paused` gerekir.
 
-## Portability
+## Taşınabilirlik
 
-No public instruction assumes a fixed clone path. Runtime storage is controlled by
-`LITLIB_RUNTIME_ROOT`; D-drive enforcement is optional via `LITLIB_REQUIRE_D_DRIVE`. The
-institution adapter is currently JLU/Windows-specific, while metadata, OA, validation, task
-state, and MCP code are designed for isolated tests and future adapters.
+Hiçbir açık talimat sabit bir klon yolu varsaymaz. Çalışma zamanı depolaması
+`LITLIB_RUNTIME_ROOT` ile denetlenir; D sürücüsü zorunluluğu `LITLIB_REQUIRE_D_DRIVE` ile
+isteğe bağlıdır. Kurum adaptörü şu an JLU/Windows'a özgüdür; metadata, OA, doğrulama, görev
+durumu ve MCP kodu ise yalıtılmış testler ve gelecekteki adaptörler için tasarlanmıştır.

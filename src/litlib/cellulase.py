@@ -1,7 +1,7 @@
-"""Structured cellulase measurements and conservative maximum selection.
+"""Yapılandırılmış selülaz ölçümleri ve temkinli maksimum seçimi.
 
-Records are intentionally permissive about missing fields. The module never compares
-raw values across incompatible units, substrates, constructs, or metric families.
+Kayıtlar eksik alanlara karşı bilerek hoşgörülüdür. Modül, uyumsuz birimler, substratlar,
+yapılar ya da metrik aileleri arasında ham değerleri asla karşılaştırmaz.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ CANONICAL_UNITS = {
 
 
 def normalize_substrate(value: str) -> str:
-    """Normalize only established aliases; preserve unknown substrate names."""
+    """Yalnız yerleşik takma adları normalleştirir; bilinmeyen substrat adlarını korur."""
     cleaned = " ".join(value.strip().casefold().split())
     return SUBSTRATE_ALIASES.get(cleaned, cleaned)
 
@@ -75,37 +75,37 @@ def reconstruct_construct_sequence(
     mutations: list[str] | None = None,
     retained_residue_range: str = "",
 ) -> dict:
-    """Reconstruct a construct only from explicit substitutions and residue range.
+    """Yapıyı yalnız açıkça verilen ikameler ve kalıntı aralığından yeniden kurar.
 
-    Accepted substitutions are compact forms such as ``A123V``. Ambiguous HGVS or
-    insertion/deletion descriptions are rejected rather than guessed.
+    Kabul edilen ikameler ``A123V`` gibi kısa biçimlerdir. Belirsiz HGVS ya da
+    ekleme/silme tanımları tahmin edilmez, reddedilir.
     """
     sequence = "".join(reference_sequence.split()).upper()
     if not sequence or not sequence.isalpha():
-        raise ValueError("reference_sequence 不是有效蛋白序列")
+        raise ValueError("reference_sequence geçerli bir protein dizisi değil")
     chars = list(sequence)
     applied: list[str] = []
     for raw in mutations or []:
         match = _MUTATION_RE.fullmatch(raw.strip())
         if not match:
-            raise ValueError(f"无法严格解析突变信息: {raw}")
+            raise ValueError(f"mutasyon bilgisi kesin olarak ayrıştırılamadı: {raw}")
         position = int(match.group("pos"))
         if position < 1 or position > len(chars):
-            raise ValueError(f"突变位置超出参考序列: {raw}")
+            raise ValueError(f"mutasyon konumu referans dizinin dışında: {raw}")
         old = match.group("from").upper()
         new = match.group("to").upper()
         if chars[position - 1] != old:
-            raise ValueError(f"突变原残基不匹配参考序列: {raw}，实际为 {chars[position - 1]}")
+            raise ValueError(f"mutasyonun özgün kalıntısı referans diziyle uyuşmuyor: {raw}, gerçekte: {chars[position - 1]}")
         chars[position - 1] = new
         applied.append(f"{old}{position}{new}")
     start, end = 1, len(chars)
     if retained_residue_range:
         range_match = re.fullmatch(r"\s*(\d+)\s*[-:]\s*(\d+)\s*", retained_residue_range)
         if not range_match:
-            raise ValueError(f"无法严格解析截短范围: {retained_residue_range}")
+            raise ValueError(f"kesme aralığı kesin olarak ayrıştırılamadı: {retained_residue_range}")
         start, end = map(int, range_match.groups())
         if start < 1 or end < start or end > len(chars):
-            raise ValueError(f"截短范围超出参考序列: {retained_residue_range}")
+            raise ValueError(f"kesme aralığı referans dizinin dışında: {retained_residue_range}")
     result = "".join(chars[start - 1:end])
     return {
         "sequence": result,
@@ -121,10 +121,10 @@ def reconstruct_construct_sequence(
 
 
 def normalize_measurement(value: float, unit: str) -> dict:
-    """Convert safe unit pairs and explicitly refuse ambiguous conversions.
+    """Güvenli birim çiftlerini dönüştürür, belirsiz dönüşümleri açıkça reddeder.
 
-    ``U/mL`` cannot become ``U/mg`` without protein concentration; it is returned
-    unchanged with ``not_convertible`` status.
+    ``U/mL`` protein konsantrasyonu olmadan ``U/mg``'ye çevrilemez; değer
+    ``not_convertible`` durumuyla değiştirilmeden döndürülür.
     """
     raw_unit = unit.strip()
     target = {
@@ -220,7 +220,7 @@ class CellulaseMeasurement(BaseModel):
 
     @property
     def comparable_key(self) -> tuple[str, str, str, str, str]:
-        """Group only records that may compete for a maximum."""
+        """Yalnız maksimum için yarışabilecek kayıtları gruplar."""
         return (
             self.sequence_sha256 or self.construct_id or self.accession,
             self.substrate_normalized or normalize_substrate(self.substrate_raw),
@@ -248,7 +248,7 @@ def write_jsonl(path: Path | str, records: list[CellulaseMeasurement]) -> None:
 
 
 def select_maxima(records: list[CellulaseMeasurement]) -> list[CellulaseMeasurement]:
-    """Select maxima only within compatible construct/substrate/metric/unit groups."""
+    """Maksimumları yalnız uyumlu yapı/substrat/metrik/birim grupları içinde seçer."""
     groups: dict[tuple[str, str, str, str, str], list[CellulaseMeasurement]] = defaultdict(list)
     for record in records:
         record.validate_missing_fields()
@@ -269,7 +269,7 @@ def select_maxima(records: list[CellulaseMeasurement]) -> list[CellulaseMeasurem
 
 
 def normalize_records(records: list[CellulaseMeasurement]) -> list[CellulaseMeasurement]:
-    """Return records with safe substrate/unit normalization, retaining raw fields."""
+    """Kayıtları güvenli substrat/birim normalleştirmesiyle, ham alanları koruyarak döndürür."""
     normalized = []
     for record in records:
         copy = record.model_copy(deep=True)

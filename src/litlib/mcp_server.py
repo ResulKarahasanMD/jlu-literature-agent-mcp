@@ -1,4 +1,4 @@
-"""只读 MCP server（mcp 2.x MCPServer）：metadata / pdf / fulltext 三级读取。"""
+"""Salt-okur MCP sunucusu (mcp 2.x MCPServer): metadata / pdf / fulltext olmak üzere üç düzeyli okuma."""
 
 from __future__ import annotations
 
@@ -22,7 +22,7 @@ def _json(payload: dict | list) -> str:
 
 
 def _open_state() -> State:
-    """Open task state without creating directories, schema, WAL, or cache files."""
+    """Görev durumunu dizin, şema, WAL ya da önbellek dosyası oluşturmadan açar."""
     return State(readonly=True)
 
 
@@ -73,9 +73,9 @@ def _search_metadata(query: str, limit: int = 20) -> list[dict]:
     if not results:
         errors = []
         if zotero_error:
-            errors.append(f"Zotero 不可用: {zotero_error}")
+            errors.append(f"Zotero kullanılamıyor: {zotero_error}")
         if state_error:
-            errors.append(f"状态库不可用: {state_error}")
+            errors.append(f"durum veritabanı kullanılamıyor: {state_error}")
         if errors:
             return [{"error": " | ".join(errors)}]
     return results[:limit]
@@ -120,13 +120,13 @@ def _find_pdf(query: str) -> dict:
         finally:
             zot.close()
     except Exception as e:
-        errors.append(f"Zotero 不可用: {e}")
+        errors.append(f"Zotero kullanılamıyor: {e}")
 
     if len(candidates) == 1:
         return candidates[0]
     if len(candidates) > 1:
         return {
-            "error": "查询匹配多个 Zotero PDF；请改用精确 DOI 或 8 位 item key",
+            "error": "sorgu birden fazla Zotero PDF'iyle eşleşti; tam DOI ya da 8 karakterlik item key kullanın",
             "candidates": candidates[:10],
         }
 
@@ -144,16 +144,16 @@ def _find_pdf(query: str) -> dict:
         finally:
             st.close()
     except Exception as e:
-        errors.append(f"状态库不可用: {e}")
+        errors.append(f"durum veritabanı kullanılamıyor: {e}")
     if len(candidates) == 1:
         return candidates[0]
     if len(candidates) > 1:
         return {
-            "error": "查询匹配多个任务库 PDF；请改用精确 DOI",
+            "error": "sorgu görev veritabanında birden fazla PDF'le eşleşti; tam DOI kullanın",
             "candidates": candidates[:10],
         }
     detail = f" ({' | '.join(errors)})" if errors else ""
-    return {"error": f"未找到 PDF{detail}"}
+    return {"error": f"PDF bulunamadı{detail}"}
 
 
 def _list_collections() -> list[dict]:
@@ -165,7 +165,7 @@ def _list_collections() -> list[dict]:
         finally:
             zot.close()
     except Exception as e:
-        return [{"error": f"Zotero 不可用: {e}"}]
+        return [{"error": f"Zotero kullanılamıyor: {e}"}]
 
 
 def _task_status(state: str | None = None) -> list[dict]:
@@ -183,21 +183,21 @@ def _task_status(state: str | None = None) -> list[dict]:
         finally:
             st.close()
     except Exception as e:
-        return [{"error": f"状态库不可用: {e}"}]
+        return [{"error": f"durum veritabanı kullanılamıyor: {e}"}]
 
 
 def library_search_metadata(query: str, limit: int = 20) -> str:
-    """按标题/DOI 在 Zotero 与本项目库中搜索文献元数据（只读）"""
+    """Başlık/DOI ile Zotero'da ve bu projenin veritabanında literatür metadata'sı arar (salt-okur)"""
     return _json(_search_metadata(query, limit))
 
 
 def library_get_pdf_path(query: str) -> str:
-    """返回匹配文献的 PDF 本地路径（只读）"""
+    """Eşleşen literatürün yerel PDF yolunu döndürür (salt-okur)"""
     return _json(_find_pdf(query))
 
 
 def library_get_fulltext(query: str, offset: int = 0, limit_chars: int = DEFAULT_LIMIT_CHARS) -> str:
-    """返回匹配文献的分页全文（默认 10000 字符，上限 20000，只读）"""
+    """Eşleşen literatürün sayfalı tam metnini döndürür (varsayılan 10000 karakter, üst sınır 20000, salt-okur)"""
     hit = _find_pdf(query)
     if "error" in hit:
         return _json(hit)
@@ -214,12 +214,12 @@ def library_get_fulltext(query: str, offset: int = 0, limit_chars: int = DEFAULT
 
 
 def library_list_collections() -> str:
-    """列出 Zotero 分类（只读）"""
+    """Zotero koleksiyonlarını listeler (salt-okur)"""
     return _json(_list_collections())
 
 
 def library_task_status(state: str | None = None) -> str:
-    """查询下载/导入任务状态（只读），state 如 READY / REQUIRES_INST"""
+    """İndirme/içe aktarma görev durumunu sorgular (salt-okur); state örn. READY / REQUIRES_INST"""
     return _json(_task_status(state))
 
 
@@ -234,7 +234,7 @@ TOOLS = [
 server = MCPServer(
     "litlib",
     version=__version__,
-    instructions="个人文献库只读接口：查询元数据、PDF 路径、分页全文。",
+    instructions="Kişisel literatür kütüphanesi salt-okur arayüzü: metadata, PDF yolu ve sayfalı tam metin sorgulama.",
     tools=TOOLS,
 )
 

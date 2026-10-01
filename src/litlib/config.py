@@ -1,4 +1,4 @@
-"""路径与环境配置：可移植运行目录与可选 D 盘存储策略。"""
+"""Yol ve ortam yapılandırması: taşınabilir çalışma dizini ve isteğe bağlı D sürücüsü depolama politikası."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ PROJECT_ROOT = Path(os.environ.get("LITLIB_ROOT") or _default_project_root())
 
 
 def _dotenv_setting(key: str) -> str:
-    """Read one project .env value early enough to construct immutable paths."""
+    """Değişmez yolları kurabilmek için proje .env'inden tek bir değeri erkenden okur."""
     env_file = PROJECT_ROOT / ".env"
     if not env_file.exists():
         return ""
@@ -85,7 +85,7 @@ class Paths:
 
 
 def on_d_drive(path: Path | str) -> bool:
-    """判断路径是否位于 D 盘（或 UNC Temp 卷即当前 Temp 盘）。"""
+    """Yolun D sürücüsünde (ya da UNC Temp biriminde, yani geçerli Temp sürücüsünde) olup olmadığını belirler."""
     p = Path(path)
     try:
         drive = Path(p.anchor).resolve().drive or p.anchor
@@ -95,7 +95,7 @@ def on_d_drive(path: Path | str) -> bool:
 
 
 def require_d_drive() -> bool:
-    """Whether large-output commands must stay on D:, defaulting to this clone's drive."""
+    """Büyük çıktı üreten komutların D:'de kalması gerekip gerekmediği; varsayılan bu klonun sürücüsüdür."""
     value = os.environ.get("LITLIB_REQUIRE_D_DRIVE") or _dotenv_setting("LITLIB_REQUIRE_D_DRIVE")
     if value:
         return value.strip().lower() in {"1", "true", "yes", "on"}
@@ -105,8 +105,8 @@ def require_d_drive() -> bool:
 def ensure_storage_path(path: Path | str) -> None:
     if require_d_drive() and not on_d_drive(path):
         raise ValueError(
-            f"存储策略要求写入 D 盘，当前路径为 {Path(path)}；"
-            "请改路径或明确设置 LITLIB_REQUIRE_D_DRIVE=0"
+            f"Depolama politikası D sürücüsüne yazmayı gerektiriyor, geçerli yol {Path(path)}; "
+            "yolu değiştirin ya da açıkça LITLIB_REQUIRE_D_DRIVE=0 ayarlayın"
         )
 
 
@@ -123,7 +123,7 @@ def ensure_dirs(paths: Paths) -> None:
 
 
 def load_dotenv(path: Path | str | None = None) -> None:
-    """加载项目 .env（简单 KEY=VALUE，不引入第三方依赖；已设置的不覆盖）。"""
+    """Proje .env dosyasını yükler (basit KEY=VALUE, üçüncü taraf bağımlılığı yok; zaten ayarlı olanların üzerine yazmaz)."""
     env_file = Path(path or (PROJECT_ROOT / ".env"))
     if not env_file.exists():
         return
@@ -139,10 +139,10 @@ def load_dotenv(path: Path | str | None = None) -> None:
 
 
 def ensure_runtime_env() -> None:
-    """进程级设置运行时环境变量（仅本进程，不改系统全局）。
+    """Çalışma zamanı ortam değişkenlerini süreç düzeyinde ayarlar (yalnız bu süreç, sistem geneli değişmez).
 
-    保证任何 CLI 入口的 TEMP/缓存/模型都落在 LITLIB_RUNTIME_ROOT，
-    然后加载其余项目 .env 设置。
+    Her CLI giriş noktasının TEMP/önbellek/model dizinlerinin LITLIB_RUNTIME_ROOT altında kalmasını sağlar,
+    ardından kalan proje .env ayarlarını yükler.
     """
     for key, value in paths.env_map.items():
         os.environ[key] = value

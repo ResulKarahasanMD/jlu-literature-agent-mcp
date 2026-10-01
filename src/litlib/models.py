@@ -1,4 +1,4 @@
-"""数据模型：work_id、任务状态机、去重键。"""
+"""Veri modelleri: work_id, görev durum makinesi, tekilleştirme anahtarları."""
 
 from __future__ import annotations
 
@@ -56,18 +56,27 @@ _DOI_RE = re.compile(r"10\.\d{4,9}/[-._;()/:A-Za-z0-9]+", re.I)
 _ARXIV_RE = re.compile(r"\d{4}\.\d{4,5}")
 _PMID_RE = re.compile(r"\d{6,9}")
 _PMC_RE = re.compile(r"PMC\d+", re.I)
+_ARXIV_DOI_RE = re.compile(r"10\.48550/arxiv\.(.+)")
 
 
 def normalize_doi(value: str) -> str:
-    """Normalize common DOI input forms without changing DOI-internal characters."""
+    """Yaygın DOI giriş biçimlerini DOI'nin iç karakterlerine dokunmadan normalleştirir."""
     value = value.strip().strip('"').strip("'")
     value = re.sub(r"^doi\s*:\s*", "", value, flags=re.I)
     value = re.sub(r"^https?://(?:dx\.)?doi\.org/", "", value, flags=re.I)
     return value.rstrip(".,;").lower()
 
 
+def arxiv_id_from_doi(doi: str | None) -> str | None:
+    """arXiv'in DataCite DOI'si (10.48550/arXiv.<id>) → arXiv ID; diğer DOI'lerde None döndürür."""
+    if not doi:
+        return None
+    m = _ARXIV_DOI_RE.fullmatch(normalize_doi(doi))
+    return m.group(1) if m else None
+
+
 def normalize_identity_text(value: str) -> str:
-    """Unicode-safe normalization for title/author identity keys."""
+    """Başlık/yazar kimlik anahtarları için Unicode güvenli normalleştirme."""
     normalized = unicodedata.normalize("NFKC", value).casefold()
     return "".join(char for char in normalized if char.isalnum())
 
@@ -93,7 +102,7 @@ class Work(BaseModel):
 
 
 def parse_input_line(line: str) -> tuple[str, str] | None:
-    """从输入行识别 (kind, value)。kind ∈ doi/pmid/pmcid/arxiv/title。"""
+    """Giriş satırından (kind, value) tanır. kind ∈ doi/pmid/pmcid/arxiv/title."""
     s = line.strip().strip('"')
     if not s:
         return None
@@ -117,7 +126,7 @@ def parse_input_line(line: str) -> tuple[str, str] | None:
 
 
 def dedupe_keys_for(work: Work, pdf_sha256: str | None = None) -> dict[str, str]:
-    """返回该 work 可用的去重键（仅非空值）。"""
+    """Bu work için kullanılabilir tekilleştirme anahtarlarını döndürür (yalnız boş olmayan değerler)."""
     keys: dict[str, str] = {}
     if work.doi:
         keys["doi"] = normalize_doi(work.doi)
@@ -151,7 +160,7 @@ def title_year_author_key(work: Work) -> str | None:
 
 
 def sha256_of_file(path: Path | str, chunk_size: int = 1 << 20) -> str:
-    """流式 SHA-256，不将整个文件读入内存。"""
+    """Akışlı SHA-256; dosyanın tamamını belleğe okumaz."""
     h = hashlib.sha256()
     with open(path, "rb") as f:
         while chunk := f.read(chunk_size):

@@ -1,80 +1,87 @@
-# Security and Privacy
+# Güvenlik ve gizlilik
 
-## Scope
+## Kapsam
 
-LitLib handles institutional credentials, browser sessions, local papers, and bibliographic
-metadata. A mistake can expose an account, copyrighted full text, or a user's research
-interests. Security claims therefore distinguish defaults from optional behavior.
+LitLib kurum kimlik bilgileri, tarayıcı oturumları, yerel makaleler ve bibliyografik
+metadata ile çalışır. Bir hata bir hesabı, telif korumalı tam metni ya da kullanıcının
+araştırma ilgi alanlarını açığa çıkarabilir. Bu yüzden güvenlik iddialarında varsayılan
+davranış ile isteğe bağlı davranış ayrı tutulur.
 
-## Secrets
+## Gizli bilgiler
 
-- JLU username/password are stored with Windows Credential Manager under the current user.
-- The password is submitted only over HTTPS to an explicit JLU IdP hostname allowlist.
-- Terms of use and attribute-release choices are detected but never accepted automatically;
-  the visible tab is preserved for the user when a checkpoint times out.
-- `.env` is for non-secret runtime settings and a contact email. Do not put passwords,
-  cookies, VPN tokens, Zotero passwords, or provider API keys in it.
-- WebVPN host tokens and session files are runtime state and are excluded from Git.
-- `litlib inst tokens` displays only presence and length, not token values.
+- JLU kullanıcı adı/parolası geçerli kullanıcı altında Windows Credential Manager ile
+  saklanır.
+- Parola yalnız HTTPS üzerinden, açıkça izin listesine alınmış JLU IdP host adlarına
+  gönderilir.
+- Kullanım koşulları ve öznitelik paylaşımı seçimleri algılanır ama asla otomatik kabul
+  edilmez; bir checkpoint zaman aşımına uğrarsa görünür sekme kullanıcı için korunur.
+- `.env` gizli olmayan çalışma ayarları ve bir iletişim e-postası içindir. İçine parola, çerez,
+  VPN token'ı, Zotero parolası ya da sağlayıcı API anahtarı koymayın.
+- WebVPN host token'ları ve oturum dosyaları çalışma zamanı durumudur, Git dışında tutulur.
+- `litlib inst tokens` token değerlerini değil, yalnız var olup olmadıklarını ve
+  uzunluklarını gösterir.
 
-Browser cookies normally remain inside the dedicated Chrome profile. Optional
-`LITLIB_EXPORT_SESSION_COOKIES=1` stores a DPAPI-encrypted backup bound to the current Windows
-user; it is off by default and the resulting `.bin` is ignored by Git.
+Tarayıcı çerezleri normalde özel Chrome profilinin içinde kalır. İsteğe bağlı
+`LITLIB_EXPORT_SESSION_COOKIES=1`, geçerli Windows kullanıcısına bağlı DPAPI ile şifreli bir
+yedek saklar; varsayılan olarak kapalıdır ve oluşan `.bin` dosyasını Git yok sayar.
 
-## Local Services
+## Yerel servisler
 
-- Chrome DevTools Protocol binds to `127.0.0.1` only.
-- Zotero Local API and ZotSeek MCP listen on loopback (`127.0.0.1:23119`).
-- LitLib MCP is stdio and performs no network listening.
-- Do not expose these services through public port forwarding or an unauthenticated tunnel.
+- Chrome DevTools Protocol yalnız `127.0.0.1`'e bağlanır.
+- Zotero Local API ve ZotSeek MCP loopback'i (`127.0.0.1:23119`) dinler.
+- LitLib MCP stdio'dur, ağ üzerinden dinlemez.
+- Bu servisleri herkese açık port yönlendirmesi ya da kimlik doğrulamasız bir tünelle dışarı
+  açmayın.
 
-## Read-Only Claims
+## Salt-okur iddiaları
 
-LitLib MCP is filesystem/task/library read-only: it opens existing SQLite with `mode=ro`,
-uses `query_only`, disables full-text cache writes, and skips CLI log/directory initialization.
+LitLib MCP dosya sistemi/görev/kütüphane açısından salt-okurdur: mevcut SQLite'ı
+`mode=ro` ile açar, `query_only` kullanır, tam metin önbelleği yazmayı kapatır ve CLI
+günlük/dizin başlatmasını atlar.
 
-ZotSeek MCP calls are read-only according to upstream behavior. The ZotSeek plugin may
-separately update `zotseek.sqlite` through manual or automatic indexing. The index is derived
-data and is not Zotero's source of truth.
+ZotSeek MCP çağrıları upstream davranışına göre salt-okurdur. ZotSeek eklentisi elle ya da
+otomatik indeksleme ile `zotseek.sqlite`'ı ayrıca güncelleyebilir. İndeks türetilmiş veridir,
+Zotero'nun doğruluk kaynağı değildir.
 
-## Logs and Audit
+## Günlükler ve denetim
 
-- File logs rotate at 20 MB with five backups.
-- Logger messages remove URL query strings and common key/token/password fields.
-- Route-attempt records separately redact URL query strings, JLU WebVPN host tokens, and
-  secret-like error fields before SQLite insertion.
-- DOI and non-secret path segments can remain for reproducibility.
+- Dosya günlükleri 20 MB'ta döndürülür, beş yedek tutulur.
+- Logger mesajlarından URL query dizeleri ve yaygın key/token/password alanları çıkarılır.
+- Rota denemesi kayıtları SQLite'a yazılmadan önce URL query dizelerini, JLU WebVPN host
+  token'larını ve gizli bilgi benzeri hata alanlarını ayrıca maskeler.
+- Yeniden üretilebilirlik için DOI ve gizli olmayan yol parçaları kalabilir.
 
-Do not paste raw browser network exports, HAR files, cookies, signed PDF URLs, or unredacted
-route databases into an issue.
+Bir issue'ya ham tarayıcı ağ dışa aktarımlarını, HAR dosyalarını, çerezleri, imzalı PDF
+URL'lerini ya da maskelenmemiş rota veritabanlarını yapıştırmayın.
 
-## Full Text and Copyright
+## Tam metin ve telif
 
-`.gitignore` excludes PDF, CAJ, XPI, databases, extracted full text, output, staging, state,
-logs, browser profiles, and `.env`. Contributors must still inspect `git status` because an
-ignore rule is not a substitute for rights review.
+`.gitignore`; PDF, CAJ, XPI, veritabanları, çıkarılmış tam metin, output, staging, state,
+günlükler, tarayıcı profilleri ve `.env` dosyalarını dışarıda bırakır. Katkıcılar yine de
+`git status`'u incelemelidir; bir ignore kuralı hak incelemesinin yerini tutmaz.
 
-The MIT license applies only to LitLib code and documentation. It does not grant the right to
-redistribute downloaded papers, publisher HTML, or licensed Zotero attachments.
+MIT lisansı yalnız LitLib'in kodu ve belgeleri için geçerlidir. İndirilen makaleleri, yayıncı
+HTML'ini ya da lisanslı Zotero eklerini yeniden dağıtma hakkı vermez.
 
-## Access-Control Boundary
+## Erişim denetimi sınırı
 
-LitLib does not bypass CAPTCHA, Turnstile, sliders, OTP, paywalls, purchase/rental pages,
-unsupported CARSI service providers, or rate limits. Institution access is supervised,
-low-concurrency, and uses the user's own authorization. A challenge pauses for the user; a
-purchase-only item stops.
+LitLib; CAPTCHA, Turnstile, kaydırıcılar, OTP, ödeme duvarları, satın alma/kiralama
+sayfaları, desteklenmeyen CARSI servis sağlayıcıları ya da hız sınırlarını aşmaz. Kurum
+erişimi gözetimlidir, düşük eşzamanlılıkla çalışır ve kullanıcının kendi yetkisini kullanır.
+Bir doğrulama çıkarsa kullanıcı için durulur; yalnız satın alınabilen bir öğede işlem biter.
 
-## Storage Policy
+## Depolama politikası
 
-`litlib doctor` reports configured project/runtime paths. `LITLIB_REQUIRE_D_DRIVE=1` enforces
-D-drive output for explicit single-paper and CNKI destinations; internal large-output paths
-derive from the project/runtime configuration. This is a local storage policy, not a general
-security requirement. Users without D: should set it to `0` and choose another private disk.
-Wheel/global installs use a platform user-data workspace unless `LITLIB_ROOT` is configured;
-they never derive writable state from `site-packages`.
+`litlib doctor` yapılandırılmış proje/çalışma zamanı yollarını raporlar.
+`LITLIB_REQUIRE_D_DRIVE=1`, açıkça verilen tek makale ve CNKI hedefleri için D sürücüsüne
+çıktıyı zorunlu kılar; büyük çıktı üreten iç yollar proje/çalışma zamanı yapılandırmasından
+türetilir. Bu bir yerel depolama politikasıdır, genel bir güvenlik gereksinimi değildir. D:
+sürücüsü olmayanlar bunu `0` yapıp başka bir özel disk seçmelidir. Wheel/global kurulumlar,
+`LITLIB_ROOT` yapılandırılmadıkça platformun kullanıcı verisi çalışma alanını kullanır;
+yazılabilir durumu asla `site-packages`'tan türetmez.
 
-## Reporting Vulnerabilities
+## Güvenlik açığı bildirme
 
-Before the repository is public, report privately to the maintainer. After GitHub publication,
-enable GitHub Private Vulnerability Reporting and use it instead of a public issue for
-credential, local-service, arbitrary-file, code-execution, or session-leak problems.
+Depo herkese açılmadan önce bakımcıya özel olarak bildirin. GitHub'da yayımlandıktan sonra
+GitHub Private Vulnerability Reporting'i açın; kimlik bilgisi, yerel servis, keyfi dosya, kod
+çalıştırma ya da oturum sızıntısı sorunları için açık issue yerine onu kullanın.

@@ -1,7 +1,7 @@
-"""机构登录适配（Shibboleth/OpenAthens/SSO）。
+"""Kurum girişi uyarlaması (Shibboleth/OpenAthens/SSO).
 
-流程：访问出版社站点 → 检测"机构登录"入口 → 选吉林大学 →
-仅在受信 JLU IdP 填写账号密码 → 用户手动确认条款/属性发布 → 回跳出版社。
+Akış: yayıncı sitesine git → "kurum girişi" bağlantısını bul → Jilin Üniversitesi'ni seç →
+hesap parolasını yalnız güvenilir JLU IdP'sine gir → kullanıcı koşulları/öznitelik paylaşımını elle onaylar → yayıncıya geri dön.
 """
 
 from __future__ import annotations
@@ -24,9 +24,9 @@ from litlib.pdf import PDFError, validate_pdf_for_work
 
 logger = logging.getLogger("litlib.inst_login")
 
-SESSION_COOKIES_FILE: Path | None = None  # 由 config 注入的 cookies 缓存路径
+SESSION_COOKIES_FILE: Path | None = None  # config tarafından atanan çerez önbelleği yolu
 
-# 常见机构登录关键词（用于识别入口/登录页）
+# Yaygın kurum girişi anahtar sözcükleri (giriş bağlantısını/giriş sayfasını tanımak için; web sayfası metniyle eşleşir, çevrilmez)
 INST_LOGIN_HINTS = (
     "institution", "institutional", "机构登录", "机构用户", "登录机构",
     "shibboleth", "openathens", "sso", "wayf", "campus", "remote access",
@@ -53,14 +53,14 @@ def allowed_jlu_idp_hosts() -> set[str]:
 
 
 def is_allowed_jlu_idp_url(url: str) -> bool:
-    """Credentials may only be submitted to explicit HTTPS JLU IdP hosts."""
+    """Kimlik bilgileri yalnız açıkça listelenmiş HTTPS JLU IdP sunucularına gönderilebilir."""
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().rstrip(".")
     return parsed.scheme.lower() == "https" and host in allowed_jlu_idp_hosts()
 
 
 def is_explicit_paywall(text: str, dc_format: str = "") -> bool:
-    """Recognize explicit purchase/rental language, not generic subscription marketing."""
+    """Genel abonelik pazarlamasını değil, açık satın alma/kiralama ifadelerini tanır."""
     purchase_text = f"{dc_format}\n{text}"
     return bool(re.search(
         r"buy protocol|purchase (?:this )?(?:article|pdf)|rent (?:this )?article|"
@@ -71,26 +71,26 @@ def is_explicit_paywall(text: str, dc_format: str = "") -> bool:
 
 
 async def connect_tab(client: httpx.AsyncClient) -> chrome_cdp.Tab:
-    """连接当前可用的浏览器页面（或新建），返回 Tab。"""
+    """Kullanılabilir tarayıcı sayfasına bağlanır (ya da yenisini açar), Tab döndürür."""
     await chrome_cdp.wait_for_cdp(timeout=10)
     pages = (await client.get(
         f"http://{chrome_cdp.CDP_HOST}:{chrome_cdp.CDP_PORT}/json/list",
         timeout=10)).json()
     page = next((p for p in pages if p.get("type") == "page"), None)
     if not page:
-        raise RuntimeError("无可用页面，请先 `litlib inst open` 启动浏览器")
+        raise RuntimeError("kullanılabilir sayfa yok; önce `litlib inst open` ile tarayıcıyı başlatın")
     tab = chrome_cdp.Tab(page["webSocketDebuggerUrl"])
     await tab.connect()
     return tab
 
 
 async def find_and_click_institution_login(tab: chrome_cdp.Tab) -> str:
-    """在落地页找'机构登录'链接/按钮并点击，返回操作描述。"""
+    """Açılış sayfasında 'kurum girişi' bağlantısını/düğmesini bulup tıklar, yapılan işlemin açıklamasını döndürür."""
     js = r'''
     (() => {
       const norm = (s) => (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
       const all = [...document.querySelectorAll('a, button, [role="button"]')];
-      // 0) 优先 href 带 type=institution / idLogin 的机构入口
+      // 0) href'inde type=institution / idLogin geçen kurum girişi önceliklidir
       for (const e of all) {
         const href = norm(e.getAttribute('href') || '');
         if (/type\s*=\s*institution/.test(href) || /institutionallogin/.test(href)) {
@@ -99,7 +99,7 @@ async def find_and_click_institution_login(tab: chrome_cdp.Tab) -> str:
           return 'clicked: ' + info;
         }
       }
-      // 1) 文本含机构登录的（优先含 institution 的）
+      // 1) metninde kurum girişi geçenler (institution içerenler önce)
       const cands = all.filter(e => {
         const t = norm(e.textContent);
         const href = norm(e.getAttribute('href') || '');
@@ -128,11 +128,11 @@ async def find_and_click_institution_login(tab: chrome_cdp.Tab) -> str:
 
 
 async def pick_jilin_wayf(tab: chrome_cdp.Tab) -> str:
-    """在 WAYF/机构选择页中选吉林大学（搜索框输入 + 点选结果）。"""
+    """WAYF/kurum seçim sayfasında Jilin Üniversitesi'ni seçer (arama kutusuna yazıp sonuca tıklar)."""
     js = r'''
     (() => {
       const norm = (s) => (s || '').toLowerCase();
-      // 1) 找可见输入框（优先 id=bdd-email / els_institution / institutionSearchInput）
+      // 1) görünür giriş kutusunu bul (öncelik id=bdd-email / els_institution / institutionSearchInput)
       const inputs = [...document.querySelectorAll('input')].filter(i => {
         const r = i.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
@@ -152,7 +152,7 @@ async def pick_jilin_wayf(tab: chrome_cdp.Tab) -> str:
     typed = str(r.get("result", {}).get("value", ""))
     if typed != "typed: jilin university":
         return typed
-    # 等待搜索结果出现后点击吉林大学（排除化学/财经等后缀院校）
+    # Arama sonuçları çıkınca Jilin Üniversitesi'ne tıkla (kimya/finans gibi ekli adlı okulları dışla)
     await asyncio.sleep(4)
     js2 = r'''
     (() => {
@@ -161,7 +161,7 @@ async def pick_jilin_wayf(tab: chrome_cdp.Tab) -> str:
         const t = norm(e.textContent);
         const head = t.slice(0, 30);
         if (!/^吉林大学|^jilin(\s+univ(ersity)?)?\b/i.test(head)) return false;
-        // 排除带后缀的相似校名
+        // ekli, benzer okul adlarını dışla
         if (/of |学院|理工|化工|财经|艺术/.test(head)) return false;
         return t.length < 120;
       });
@@ -183,14 +183,14 @@ async def pick_jilin_wayf(tab: chrome_cdp.Tab) -> str:
 
 
 async def fill_idp_login(tab: chrome_cdp.Tab, username: str, password: str) -> str:
-    """在统一认证页填账号密码并提交。"""
+    """Birleşik kimlik doğrulama sayfasında hesap parolasını doldurup gönderir."""
     location = await tab.cmd("Runtime.evaluate", {
         "expression": "location.href", "returnByValue": True,
     })
     current_url = str(location.get("result", {}).get("value", ""))
     if not is_allowed_jlu_idp_url(current_url):
         host = (urlparse(current_url).hostname or "unknown").lower()
-        raise PermissionError(f"拒绝向非受信 IdP 提交凭证: {host}")
+        raise PermissionError(f"güvenilir olmayan IdP'ye kimlik bilgisi gönderimi reddedildi: {host}")
     js = r'''
     (() => {
       const fields = [...document.querySelectorAll('input')];
@@ -209,7 +209,7 @@ async def fill_idp_login(tab: chrome_cdp.Tab, username: str, password: str) -> s
 
 
 async def pick_tandf_wayf(tab: chrome_cdp.Tab) -> str:
-    """T&F (Atypon) WAYF：先选 CARSI 联邦，再输 jilin 拼音选吉林大学。"""
+    """T&F (Atypon) WAYF: önce CARSI federasyonunu seçer, sonra pinyin 'jilin' yazıp Jilin Üniversitesi'ni seçer."""
     js = r'''
     (() => {
       const fed = document.querySelector('select#shib-search--fed');
@@ -276,7 +276,7 @@ async def pick_tandf_wayf(tab: chrome_cdp.Tab) -> str:
 
 
 async def submit_idp_login(tab: chrome_cdp.Tab) -> str:
-    """Submit an already-filled login form without accepting terms or checking boxes."""
+    """Önceden doldurulmuş giriş formunu koşulları kabul etmeden ve kutu işaretlemeden gönderir."""
     js = r'''
     (() => {
       const norm = (s) => (s || '').trim().toLowerCase();
@@ -299,7 +299,7 @@ async def submit_idp_login(tab: chrome_cdp.Tab) -> str:
 
 async def handle_post_login(tab: chrome_cdp.Tab, host_hint: str = "",
                             timeout: float = 120.0) -> str:
-    """Wait for user-confirmed terms/attribute release and publisher redirect."""
+    """Kullanıcının koşulları/öznitelik paylaşımını onaylamasını ve yayıncıya yönlendirmeyi bekler."""
     deadline = time.monotonic() + timeout
     last_url = ""
     human_checkpoint = ""
@@ -319,7 +319,7 @@ async def handle_post_login(tab: chrome_cdp.Tab, host_hint: str = "",
         except Exception:
             pass
 
-        # Elsevier 个性化页（"We now know you're from ..." / personalize experience）→ 点 Skip
+        # Elsevier kişiselleştirme sayfası ("We now know you're from ..." / personalize experience) → Skip'e tıkla
         if re.search(r"personalize your experience|we now know you'?re from", text, re.I):
             js = r'''
             (() => {
@@ -333,32 +333,32 @@ async def handle_post_login(tab: chrome_cdp.Tab, host_hint: str = "",
             })()
             '''
             r = await tab.cmd("Runtime.evaluate", {"expression": js, "returnByValue": True})
-            print(f"  [Elsevier 个性化页] {r.get('result', {}).get('value')}")
+            print(f"  [Elsevier kişiselleştirme sayfası] {r.get('result', {}).get('value')}")
             await asyncio.sleep(6)
             continue
 
-        # 条款声明页
+        # Koşul/beyan sayfası (Çince desenler gerçek sayfa metnini eşler)
         if re.search(r"声明|agreement|同意此使用条款|使用条款", text, re.I) and re.search(r"提交|同意", text, re.I):
             if human_checkpoint != "terms":
-                print("  HUMAN_REQUIRED: 请在专用浏览器中阅读并手动确认声明/使用条款")
+                print("  HUMAN_REQUIRED: özel tarayıcıda beyanı/kullanım koşullarını okuyup elle onaylayın")
             human_checkpoint = "terms"
             await asyncio.sleep(5)
             continue
 
-        # 信息发布（属性共享）确认页
+        # Bilgi paylaşımı (öznitelik paylaşımı) onay sayfası
         if re.search(r"信息发布|attribute|共享|shib-attr-release", text, re.I) and re.search(r"接受|accept", text, re.I):
             if human_checkpoint != "attribute-release":
-                print("  HUMAN_REQUIRED: 请在专用浏览器中检查属性共享范围并手动点击接受/拒绝")
+                print("  HUMAN_REQUIRED: özel tarayıcıda paylaşılan öznitelikleri kontrol edip elle kabul/ret'e tıklayın")
             human_checkpoint = "attribute-release"
             await asyncio.sleep(5)
             continue
 
-        # 人机验证（Turnstile 等）——等待其自动完成或用户干预
+        # İnsan doğrulaması (Turnstile vb.): kendiliğinden tamamlanması ya da kullanıcı müdahalesi beklenir
         if re.search(r"请稍候|just a moment|安全验证|captcha|人机", text, re.I):
             await asyncio.sleep(5)
             continue
 
-        # 已回跳出版社（严格比较 hostname，避免 query 参数误判）
+        # Yayıncıya geri dönüldü (query parametreleri yanıltmasın diye hostname kesin karşılaştırılır)
         current_host = (urlparse(last_url).hostname or "").lower().removeprefix("www.")
         expected_host = host_hint.lower().removeprefix("www.")
         if expected_host and (current_host == expected_host or current_host.endswith("." + expected_host)):
@@ -368,7 +368,7 @@ async def handle_post_login(tab: chrome_cdp.Tab, host_hint: str = "",
             if last_url and "shenfen" not in last_url:
                 return f"redirected: {last_url[:100]}"
 
-        # 登录失败（表单还在）
+        # Giriş başarısız (form hâlâ sayfada)
         if re.search(r"密码|password|错误|失败|invalid", text, re.I) and "idp" in last_url:
             return f"login-failed-page: {last_url[:100]}"
 
@@ -380,7 +380,7 @@ async def handle_post_login(tab: chrome_cdp.Tab, host_hint: str = "",
 
 async def wait_redirect_back(tab: chrome_cdp.Tab, timeout: float = 60.0,
                             host_hint: str = "") -> str:
-    """等待登录回跳完成，返回最终 URL 前缀。"""
+    """Giriş sonrası geri yönlendirmenin bitmesini bekler, son URL önekini döndürür."""
     deadline = time.monotonic() + timeout
     last = ""
     while time.monotonic() < deadline:
@@ -406,7 +406,7 @@ async def wait_redirect_back(tab: chrome_cdp.Tab, timeout: float = 60.0,
 
 
 async def wait_for_human_challenge(tab: chrome_cdp.Tab, timeout: float = 180.0) -> bool:
-    """检测 CAPTCHA/Turnstile；存在时等待用户在可见浏览器中手动完成。"""
+    """CAPTCHA/Turnstile'ı algılar; varsa kullanıcının görünür tarayıcıda elle tamamlamasını bekler."""
     challenge = re.compile(
         r"are you a robot|captcha|turnstile|just a moment|请稍候|安全验证|人机",
         re.I,
@@ -425,14 +425,14 @@ async def wait_for_human_challenge(tab: chrome_cdp.Tab, timeout: float = 180.0) 
         if not challenge.search(text):
             return True
         if not announced:
-            print(f"  检测到人机验证，请在专用浏览器中手动完成；最多等待 {int(timeout)} 秒 ...")
+            print(f"  insan doğrulaması algılandı, özel tarayıcıda elle tamamlayın; en fazla {int(timeout)} sn beklenecek ...")
             announced = True
         await asyncio.sleep(5)
     return False
 
 
 async def export_cookies(tab: chrome_cdp.Tab, dest: Path) -> int:
-    """导出浏览器全部 cookie 到 DPAPI 加密文件。"""
+    """Tarayıcının tüm çerezlerini DPAPI ile şifreli dosyaya aktarır."""
     from litlib import creds
     r = await tab.cmd("Network.getAllCookies", {})
     cookies = r.get("cookies", [])
@@ -444,7 +444,7 @@ async def export_cookies(tab: chrome_cdp.Tab, dest: Path) -> int:
 
 
 async def import_cookies(tab: chrome_cdp.Tab, src: Path) -> int:
-    """从 DPAPI 文件恢复 cookie 到浏览器。"""
+    """Çerezleri DPAPI dosyasından tarayıcıya geri yükler."""
     if not src.exists():
         return 0
     from litlib import creds
@@ -474,9 +474,9 @@ async def import_cookies(tab: chrome_cdp.Tab, src: Path) -> int:
 async def fetch_file_via_browser(tab: chrome_cdp.Tab, url: str | None, dest: Path,
                                  file_kind: str = "binary", referer: str = "",
                                  max_bytes: int = 50 * 1024 * 1024) -> dict:
-    """在当前页面上下文 fetch 文件 URL（同源要求），分块取 base64 保存。
+    """Dosya URL'ini geçerli sayfa bağlamında fetch eder (aynı köken şartı), base64 parçalar halinde alıp kaydeder.
 
-    url 为 None 时使用页面当前 location。适用于 Cloudflare/机构会话站点。
+    url None ise sayfanın geçerli location'ı kullanılır. Cloudflare'li ve kurum oturumlu siteler için uygundur.
     """
     import base64 as _b64
 
@@ -501,17 +501,17 @@ async def fetch_file_via_browser(tab: chrome_cdp.Tab, url: str | None, dest: Pat
     r = await tab.cmd("Runtime.evaluate", {"expression": js_fetch, "awaitPromise": True, "returnByValue": True})
     if r.get("exceptionDetails"):
         detail = r["exceptionDetails"].get("text", "JavaScript fetch error")
-        raise PDFError(f"fetch 失败: {detail}")
+        raise PDFError(f"fetch başarısız: {detail}")
     v = str(r.get("result", {}).get("value", ""))
     if not v.startswith("OK:"):
-        raise PDFError(f"fetch 文件失败: {v[:120]}")
+        raise PDFError(f"dosya fetch edilemedi: {v[:120]}")
     total = int(v.split(":")[1])
     if total > max_bytes:
         try:
             await tab.cmd("Runtime.evaluate", {"expression": "delete window.__litlib_pdfbuf"})
         except Exception:
             pass
-        raise PDFError(f"浏览器文件超过大小上限: {total} > {max_bytes}")
+        raise PDFError(f"tarayıcıdaki dosya boyut üst sınırını aşıyor: {total} > {max_bytes}")
     CH = 3 * 1024 * 1024
     nchunks = (total + CH - 1) // CH
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -532,7 +532,7 @@ async def fetch_file_via_browser(tab: chrome_cdp.Tab, url: str | None, dest: Pat
                 r2 = await tab.cmd("Runtime.evaluate", {"expression": js_chunk, "returnByValue": True})
                 chunk = _b64.b64decode(str(r2.get("result", {}).get("value", "")))
                 if file_kind == "pdf" and i == 0 and chunk[:4] != b"%PDF":
-                    raise PDFError(f"浏览器下载内容非 PDF（首块 {len(chunk)}B）")
+                    raise PDFError(f"tarayıcıdan indirilen içerik PDF değil (ilk parça {len(chunk)}B)")
                 f.write(chunk)
         os.replace(part, dest)
     except BaseException:
@@ -552,7 +552,7 @@ async def fetch_pdf_via_browser(tab: chrome_cdp.Tab, url: str | None, dest: Path
 
 
 async def find_pdf_link(tab: chrome_cdp.Tab) -> str:
-    """在文章落地页找 PDF 下载链接（showPdf/pdfft/download/pdf）。"""
+    """Makale açılış sayfasında PDF indirme bağlantısını bulur (showPdf/pdfft/download/pdf)."""
     js = r'''
     (() => {
       const norm = (s) => (s || '').trim().toLowerCase();
@@ -572,7 +572,7 @@ async def find_pdf_link(tab: chrome_cdp.Tab) -> str:
         norm(a.href) + ' ' + norm(a.textContent)));
       if (!main.length) return '';
       const pool = main;
-      // 正文 PDF 优先于补充材料和任意 PDF 链接
+      // ana metin PDF'i ek materyallerden ve rastgele PDF bağlantılarından önce gelir
        const best = pool.find(a => /showpdf|pdfft|article-pdf|articlepdf|\/doi\/(pdf|epdf)/.test(norm(a.href))) || pool[0];
       return best.href;
     })()
@@ -583,10 +583,10 @@ async def find_pdf_link(tab: chrome_cdp.Tab) -> str:
 
 async def capture_pdf_after_click(tab: chrome_cdp.Tab, pdf_url: str, dest: Path,
                                   timeout: float = 45.0) -> dict | None:
-    """Wiley 专用：导航到 epdf 查看页，页内同源 fetch 完整 pdfdirect 字节。
+    """Wiley'ye özel: epdf görüntüleme sayfasına gider, sayfa içinden aynı kökenle pdfdirect baytlarının tamamını fetch eder.
 
-    CDP getResponseBody 只能拿到 viewer 的分块范围响应（262 KB 截断）；
-    在 epdf 页上下文内 fetch 同源的 pdfdirect?hmac=... 可获完整 PDF。
+    CDP getResponseBody yalnız görüntüleyicinin parçalı aralık yanıtını alabiliyor (262 KB'ta kesiliyor);
+    epdf sayfa bağlamında aynı kökenli pdfdirect?hmac=... fetch edilince PDF'in tamamı alınır.
     """
     if not re.search(r"/doi/(?:e)?pdf(?:direct)?/", pdf_url):
         return None
@@ -633,7 +633,7 @@ async def capture_pdf_after_click(tab: chrome_cdp.Tab, pdf_url: str, dest: Path,
 
 
 def known_pdf_url(doi: str, current_url: str = "") -> str:
-    """由稳定 publisher 规则构造正文 PDF URL，仅作为落地页发现失败后的候选。"""
+    """Kararlı yayıncı kurallarından ana metin PDF URL'ini kurar; yalnız açılış sayfasında bulunamazsa aday olarak kullanılır."""
     value = doi.lower().strip()
     host = (urlparse(current_url).hostname or "").lower()
     if value.startswith("10.1126/") or host.endswith("science.org"):
@@ -648,16 +648,16 @@ def known_pdf_url(doi: str, current_url: str = "") -> str:
 
 
 async def download_doi_via_browser(doi: str, dest: Path) -> dict:
-    """机构渠道整条链路：DOI → 文章页 → PDF 链接 → 下载保存。
+    """Kurum kanalının tüm zinciri: DOI → makale sayfası → PDF bağlantısı → indir ve kaydet.
 
-    需先完成 `litlib inst login <url>` 让浏览器保持机构会话。
-    两种模式自动适配：
-    - 同源 fetch（Cell：showPdf 直接返回 PDF）
-    - 导航到 PDF 触发 CDN 重定向，在新标签同源 fetch（OUP：silverchair CDN）
+    Tarayıcının kurum oturumunu tutması için önce `litlib inst login <url>` tamamlanmalıdır.
+    İki mod otomatik seçilir:
+    - Aynı kökenli fetch (Cell: showPdf doğrudan PDF döndürür)
+    - PDF'e gidip CDN yönlendirmesini tetikler, yeni sekmede aynı kökenli fetch (OUP: silverchair CDN)
     """
     ws = await chrome_cdp.create_tab_navigate(f"https://doi.org/{doi}", timeout=30)
     if not ws:
-        raise PDFError("无法创建 DOI 下载标签页")
+        raise PDFError("DOI indirme sekmesi oluşturulamadı")
     tab = chrome_cdp.Tab(ws)
     await tab.connect()
     keep_download_tab_open = False
@@ -670,7 +670,7 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
                 break
             await asyncio.sleep(5)
         if not pdf_url:
-            # 人机验证由用户在可见浏览器中手动完成，完成后自动继续。
+            # İnsan doğrulamasını kullanıcı görünür tarayıcıda elle tamamlar; bitince otomatik devam edilir.
             try:
                 r = await tab.cmd("Runtime.evaluate", {
                     "expression": "document.body ? document.body.innerText.slice(0, 300) : ''",
@@ -679,7 +679,7 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
             except Exception:
                 body_text = ""
             if re.search(r"are you a robot|captcha|turnstile|just a moment|安全验证|人机", body_text, re.I):
-                print("  检测到人机验证，请在专用浏览器中完成；最多等待 180 秒 ...")
+                print("  insan doğrulaması algılandı, özel tarayıcıda tamamlayın; en fazla 180 sn beklenecek ...")
                 deadline = time.monotonic() + 180
                 while time.monotonic() < deadline:
                     await asyncio.sleep(5)
@@ -688,9 +688,9 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
                         break
                 if not pdf_url:
                     keep_download_tab_open = True
-                    raise PDFError("HUMAN_REQUIRED: 人机验证尚未由用户完成")
+                    raise PDFError("HUMAN_REQUIRED: insan doğrulaması kullanıcı tarafından henüz tamamlanmadı")
         if not pdf_url:
-            # 一些 publisher 仅提供 JS 按钮/原生下载，不暴露稳定 href。
+            # Bazı yayıncılar yalnız JS düğmesi/yerel indirme sunar, kararlı bir href vermez.
             try:
                 chrome_cdp.DOWNLOAD_DIR.mkdir(parents=True, exist_ok=True)
                 before = set(chrome_cdp.DOWNLOAD_DIR.glob("*.pdf"))
@@ -728,12 +728,12 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
                 body_text = ""
                 dc_format = ""
             if re.search(r"429 too many requests|you have sent too many requests|just a moment|cf-error", body_text, re.I):
-                raise PDFError(f"站点限流/反爬: {body_text[:60]}")
+                raise PDFError(f"site hız sınırı/anti-bot: {body_text[:60]}")
             html_only = dc_format.strip().casefold() == "text/html"
             if is_explicit_paywall(body_text, dc_format) or html_only:
-                reason = "HTML-only 且未发现 PDF entitlement" if html_only else "页面明确显示购买/租赁"
+                reason = "yalnız HTML, PDF yetkisi bulunamadı" if html_only else "sayfa açıkça satın alma/kiralama gösteriyor"
                 raise PDFError(f"PAYWALLED: {reason} ({dc_format or 'format unknown'})")
-            # 落地页若是 abstract（Cell 等），尝试进入 fulltext 页再找
+            # Açılış sayfası özetse (Cell vb.) tam metin sayfasına geçip orada aranır
             cur = ""
             try:
                 r = await tab.cmd("Runtime.evaluate", {"expression": "location.href", "returnByValue": True})
@@ -743,7 +743,7 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
             if re.search(r"/abstract/|/article/abstract", cur, re.I):
                 ft = re.sub(r"/abstract/", "/fulltext/", cur, count=1)
                 ft = ft.split("?")[0]
-                print(f"  abstract 落地页，进入 fulltext: {ft[:90]}")
+                print(f"  özet açılış sayfası, tam metne geçiliyor: {ft[:90]}")
                 await chrome_cdp.navigate(tab, ft)
                 await asyncio.sleep(10)
                 for _ in range(4):
@@ -754,7 +754,7 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
             if not pdf_url:
                 pdf_url = known_pdf_url(doi, cur)
         if not pdf_url:
-            raise PDFError(f"文章页未找到 PDF 链接（当前 {cur[:100]}）")
+            raise PDFError(f"makale sayfasında PDF bağlantısı bulunamadı (geçerli {cur[:100]})")
         if pdf_url.startswith("/"):
             r = await tab.cmd("Runtime.evaluate", {"expression": "location.origin", "returnByValue": True})
             pdf_url = str(r.get("result", {}).get("value", "")) + pdf_url
@@ -764,10 +764,10 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
                 return network_capture
             return await fetch_pdf_via_browser(tab, pdf_url, dest)
         except PDFError as e:
-            print(f"  同源 fetch 失败（{str(e)[:60]}），尝试导航式 CDN 下载 ...")
+            print(f"  aynı kökenli fetch başarısız ({str(e)[:60]}), gezinmeli CDN indirmesi deneniyor ...")
         pdf_tab_ws = await chrome_cdp.create_tab_navigate(pdf_url, timeout=30)
         if not pdf_tab_ws:
-            raise PDFError("导航后未找到 CDN 标签页")
+            raise PDFError("gezinmeden sonra CDN sekmesi bulunamadı")
         cdn_tab = chrome_cdp.Tab(pdf_tab_ws)
         await cdn_tab.connect()
         try:
@@ -784,7 +784,7 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
                     break
                 await asyncio.sleep(2)
             if not cdn_url or "about:blank" in cdn_url:
-                raise PDFError("CDN 标签页导航未完成")
+                raise PDFError("CDN sekmesinde gezinme tamamlanmadı")
             return await fetch_pdf_via_browser(cdn_tab, None, dest)
         finally:
             await cdn_tab.close_target()
@@ -796,7 +796,7 @@ async def download_doi_via_browser(doi: str, dest: Path) -> dict:
 
 
 def _advance_to_ready(st, task_id: int) -> bool:
-    """按状态机把任务逐级推进到 READY（下载事实已就绪，仅登记用）。"""
+    """Görevi durum makinesine göre adım adım READY'e ilerletir (indirme zaten yapılmış, yalnız kayıt için)."""
     from litlib.models import TaskState
     chains = {
         TaskState.REQUIRES_INST: (TaskState.INST_QUEUED, TaskState.DOWNLOADING, TaskState.VERIFYING),
@@ -834,9 +834,9 @@ def _advance_to_ready(st, task_id: int) -> bool:
 
 
 def register_download_to_db(doi: str, dest: Path, channel: str) -> bool:
-    """按 DOI 把已下载文件登记进任务库并置为 READY（幂等，自动同步）。
+    """İndirilmiş dosyayı DOI ile görev veritabanına kaydeder ve READY yapar (idempotent, otomatik eşitleme).
 
-    找不到对应 work/task 或文件校验失败时返回 False，不抛错。
+    İlgili work/task bulunamazsa ya da dosya doğrulaması başarısızsa hata fırlatmaz, False döndürür.
     """
     from litlib.models import sha256_of_file
     from litlib.state import State
@@ -857,28 +857,28 @@ def register_download_to_db(doi: str, dest: Path, channel: str) -> bool:
         st.add_file(work["work_id"], str(dest), sha, dest.stat().st_size, channel)
         return _advance_to_ready(st, task["id"])
     except Exception as exc:
-        logger.warning("登记下载失败: %s (%s)", doi, exc)
+        logger.warning("indirme kaydı başarısız: %s (%s)", doi, exc)
         return False
     finally:
         st.close()
 
 
 async def download_doi_and_register(doi: str, dest: Path, channel: str | None = None) -> dict:
-    """下载正文并自动登记到任务库（下载 + 自动同步一条龙）。"""
+    """Ana metni indirir ve görev veritabanına otomatik kaydeder (indirme + otomatik eşitleme tek adımda)."""
     info = await download_doi_via_browser(doi, dest)
     registered = register_download_to_db(doi, dest, channel or info.get("via", "browser"))
     if not registered:
         raise PDFError(
-            "PDF 已下载但任务库登记失败；请保留文件并检查 DOI 是否已建任务及状态库日志"
+            "PDF indirildi ama görev veritabanına kaydedilemedi; dosyayı saklayın, DOI için görev açılıp açılmadığını ve durum veritabanı günlüğünü kontrol edin"
         )
     info["registered"] = True
     return info
 
 
 async def download_doi_inst_with_retry(doi: str, dest: Path) -> dict:
-    """机构渠道 + 失败自动登录重试。
-    若机构会话缺失（页面显示登录入口），先对 DOI 所属域名执行
-    `auto_login` 再重试一次下载。
+    """Kurum kanalı + başarısızlıkta otomatik giriş ile yeniden deneme.
+    Kurum oturumu yoksa (sayfada giriş bağlantısı görünüyorsa) önce DOI'nin alan adında
+    `auto_login` çalıştırılır, sonra indirme bir kez daha denenir.
     """
     from litlib.inst import doi_to_publisher
     mapped_domain = (doi_to_publisher(doi) or ("", ""))[0]
@@ -889,28 +889,28 @@ async def download_doi_inst_with_retry(doi: str, dest: Path) -> dict:
         domain = mapped_domain if mapped_domain == "cell.com" else actual_domain or mapped_domain
         if not domain:
             raise
-        print(f"  机构渠道失败（{str(e)[:60]}），尝试自动机构登录 {domain} ...")
+        print(f"  kurum kanalı başarısız ({str(e)[:60]}), {domain} için otomatik kurum girişi deneniyor ...")
         return await login_and_download_doi(doi, dest, domain)
 
 
 async def login_and_download_doi(doi: str, dest: Path, domain: str = "") -> dict:
-    """对 DOI 最终出版社执行机构登录，再下载正文。"""
+    """DOI'nin nihai yayıncısında kurum girişi yapar, sonra ana metni indirir."""
     from litlib.inst import doi_to_publisher
     domain = domain or await resolve_doi_host(doi) or (doi_to_publisher(doi) or ("", ""))[0]
     if not domain:
-        raise PDFError("无法解析 DOI 出版社域名")
+        raise PDFError("DOI'nin yayıncı alan adı çözümlenemedi")
     base = {"cell.com": "https://www.cell.com/",
             "academic.oup.com": "https://academic.oup.com/"}.get(domain)
     if not base:
         base = f"https://{domain}/"
     result = await auto_login(base, host_hint=domain)
     if not result.get("ok"):
-        raise PDFError(f"自动登录失败: {result.get('reason', 'unknown')}")
+        raise PDFError(f"otomatik giriş başarısız: {result.get('reason', 'unknown')}")
     return await download_doi_via_browser(doi, dest)
 
 
 async def resolve_doi_host(doi: str) -> str:
-    """通过 DOI 实际重定向解析出版社 host，避免只依赖前缀映射。"""
+    """Yayıncı host'unu DOI'nin gerçek yönlendirmesinden çözer; yalnız önek eşlemesine dayanmaz."""
     try:
         async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             r = await client.get(
@@ -922,10 +922,10 @@ async def resolve_doi_host(doi: str) -> str:
 
 
 async def auto_login(url: str, host_hint: str = "") -> dict:
-    """Institution login with strict IdP host validation and human consent checkpoints."""
+    """Sıkı IdP host doğrulaması ve insan onayı checkpoint'leriyle kurum girişi."""
     ws = await chrome_cdp.create_tab_navigate(url, timeout=30)
     if not ws:
-        return {"ok": False, "reason": "无法创建机构登录标签页"}
+        return {"ok": False, "reason": "kurum girişi sekmesi oluşturulamadı"}
     tab = chrome_cdp.Tab(ws)
     await tab.connect()
     steps: list[str] = []
@@ -936,10 +936,10 @@ async def auto_login(url: str, host_hint: str = "") -> dict:
             keep_tab_open = True
             return {
                 "ok": False, "human_required": True,
-                "reason": "HUMAN_REQUIRED: 人机验证等待超时", "steps": steps,
+                "reason": "HUMAN_REQUIRED: insan doğrulaması beklenirken zaman aşımı", "steps": steps,
             }
 
-        # 1) 机构登录入口
+        # 1) Kurum girişi bağlantısı
         step = await find_and_click_institution_login(tab)
         steps.append(f"login-entry: {step}")
         await asyncio.sleep(6)
@@ -947,10 +947,10 @@ async def auto_login(url: str, host_hint: str = "") -> dict:
             keep_tab_open = True
             return {
                 "ok": False, "human_required": True,
-                "reason": "HUMAN_REQUIRED: 机构入口人机验证等待超时", "steps": steps,
+                "reason": "HUMAN_REQUIRED: kurum girişinde insan doğrulaması beklenirken zaman aşımı", "steps": steps,
             }
 
-        # 2) WAYF 选校（T&F 需先选 CARSI 联邦）
+        # 2) WAYF'ta okul seçimi (T&F'de önce CARSI federasyonu seçilmeli)
         r = await tab.cmd("Runtime.evaluate", {
             "expression": "!!document.querySelector('select#shib-search--fed')",
             "returnByValue": True})
@@ -964,10 +964,10 @@ async def auto_login(url: str, host_hint: str = "") -> dict:
             keep_tab_open = True
             return {
                 "ok": False, "human_required": True,
-                "reason": "HUMAN_REQUIRED: WAYF 人机验证等待超时", "steps": steps,
+                "reason": "HUMAN_REQUIRED: WAYF'ta insan doğrulaması beklenirken zaman aşımı", "steps": steps,
             }
 
-        # 3) 仅在 HTTPS JLU IdP allowlist 中填表；已记住会话则无需凭证。
+        # 3) Form yalnız HTTPS JLU IdP izin listesindeyse doldurulur; oturum hatırlanıyorsa kimlik bilgisi gerekmez.
         filled = False
         on_post_login_page = False
         page_text = ""
@@ -989,7 +989,7 @@ async def auto_login(url: str, host_hint: str = "") -> dict:
                 on_post_login_page = True
                 break
             if re.search(r"429 too many requests|you have sent too many requests|cloudflare|cf-error|are you a robot|just a moment", page_text, re.I):
-                return {"ok": False, "reason": f"站点限流/反爬: {page_text[:80]}", "steps": steps}
+                return {"ok": False, "reason": f"site hız sınırı/anti-bot: {page_text[:80]}", "steps": steps}
             current_host = (urlparse(cur_url).hostname or "").lower().removeprefix("www.")
             expected_host = host_hint.lower().removeprefix("www.")
             still_selecting_institution = bool(re.search(
@@ -1015,13 +1015,13 @@ async def auto_login(url: str, host_hint: str = "") -> dict:
                 host = current_host or "unknown"
                 return {
                     "ok": False,
-                    "reason": f"拒绝向非受信 IdP 提交凭证: {host}",
+                    "reason": f"güvenilir olmayan IdP'ye kimlik bilgisi gönderimi reddedildi: {host}",
                     "steps": steps,
                 }
             if is_allowed_jlu_idp_url(cur_url):
                 cred = load_institution_cred()
                 if not cred:
-                    return {"ok": False, "reason": "无机构凭证，请先运行 `litlib inst set-cred`"}
+                    return {"ok": False, "reason": "kurum kimlik bilgisi yok; önce `litlib inst set-cred` çalıştırın"}
                 username, password = cred
                 step = await fill_idp_login(tab, username, password)
                 steps.append(f"idp-fill: {step}")
@@ -1035,7 +1035,7 @@ async def auto_login(url: str, host_hint: str = "") -> dict:
         if not filled and not on_post_login_page:
             return {
                 "ok": False,
-                "reason": "未在受信 HTTPS JLU IdP 找到可提交的登录表单",
+                "reason": "güvenilir HTTPS JLU IdP'sinde gönderilebilir giriş formu bulunamadı",
                 "steps": steps,
             }
 

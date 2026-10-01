@@ -1,4 +1,4 @@
-"""UniProt accession lookup and linked publication extraction."""
+"""UniProt accession sorgusu ve bağlantılı yayınların çıkarılması."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _citation_identifiers(reference: dict) -> dict:
 
 
 def parse_entry(payload: dict) -> dict:
-    """Normalize the fields needed to find enzyme papers and reconstruct variants."""
+    """Enzim makalelerini bulmak ve varyantları yeniden kurmak için gereken alanları normalleştirir."""
     primary = payload.get("primaryAccession") or ""
     sequence = payload.get("sequence") or {}
     comments = payload.get("comments") or []
@@ -70,7 +70,7 @@ async def fetch_entry(client: httpx.AsyncClient, accession: str) -> dict:
 
 
 def linked_identifiers(entry: dict) -> list[str]:
-    """Return deduplicated DOI/PMID/PMCID identifiers in paper order."""
+    """Tekilleştirilmiş DOI/PMID/PMCID tanımlayıcılarını makaledeki sırayla döndürür."""
     result = []
     seen = set()
     for reference in entry.get("references", []):

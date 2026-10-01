@@ -1,6 +1,6 @@
-# Operations
+# İşletim
 
-## Setup and Health
+## Kurulum ve sağlık kontrolü
 
 ```powershell
 Copy-Item .env.example .env
@@ -10,11 +10,11 @@ uv run pytest
 uv run ruff check .
 ```
 
-Use `scripts/run.ps1` when a wrapper is preferred. It honors `LITLIB_RUNTIME_ROOT`, defaults
-to `D:\LitLibRuntime` for a clone on D:, and otherwise uses `.litlib-runtime` in the clone.
-It changes process-level environment only.
+Bir sarmalayıcı tercih ediliyorsa `scripts/run.ps1` kullanın. `LITLIB_RUNTIME_ROOT`'a uyar,
+D:'deki bir klon için varsayılan olarak `D:\LitLibRuntime`'ı, aksi halde klondaki
+`.litlib-runtime`'ı kullanır. Yalnız süreç düzeyindeki ortamı değiştirir.
 
-## Routine Workflow
+## Olağan iş akışı
 
 ```powershell
 uv run litlib status --verbose
@@ -24,8 +24,8 @@ uv run litlib run --stage oa
 uv run litlib verify
 ```
 
-Only then open the supervised institutional browser for `REQUIRES_INST` tasks. Always close it
-after the batch:
+Gözetimli kurum tarayıcısını ancak bundan sonra, `REQUIRES_INST` görevleri için açın. Parti
+bitince her zaman kapatın:
 
 ```powershell
 uv run litlib inst open
@@ -33,7 +33,7 @@ uv run litlib run --stage inst --access-mode auto
 uv run litlib inst close
 ```
 
-## Recovery
+## Kurtarma
 
 ```powershell
 uv run litlib status --attempts <task-id>
@@ -42,71 +42,76 @@ uv run litlib queue recover --failed
 uv run litlib queue recover --paused
 ```
 
-Use `--failed` only after fixing the cause. Use `--paused` after the user completed a challenge
-or a rate-limit cooldown. Repeated retries without classification are not an operational fix.
+`--failed`'i yalnız nedeni giderdikten sonra kullanın. `--paused`'ı kullanıcı bir doğrulamayı
+tamamladıktan ya da hız sınırı soğuması bittikten sonra kullanın. Sınıflandırmadan tekrar
+tekrar denemek işletimsel bir çözüm değildir.
 
-## Zotero Import
+## Zotero'ya aktarma
 
-1. Run `litlib proposal`; it refuses to create an empty proposal or include a missing PDF.
-2. User imports the RIS in Zotero and inspects item metadata/PDF attachments.
-3. Run `litlib review` for the intended batch.
-4. Run `litlib import --lookup`; it verifies exact parent items and PDFs before `IMPORTED`.
+1. `litlib proposal` çalıştırın; boş bir öneri oluşturmayı ya da eksik PDF eklemeyi reddeder.
+2. Kullanıcı RIS'i Zotero'ya aktarır ve öğe metadata'sını/PDF eklerini inceler.
+3. İlgili parti için `litlib review` çalıştırın.
+4. `litlib import --lookup` çalıştırın; `IMPORTED` öncesinde tam parent item'ları ve PDF'leri
+   doğrular.
 
-If Zotero is stopped, an item is ambiguous, or an attachment is absent, restart/repair Zotero
-and rerun. Do not manually update SQLite to skip the verification.
+Zotero kapalıysa, bir öğe belirsizse ya da ek yoksa Zotero'yu yeniden başlatın/onarın ve
+tekrar çalıştırın. Doğrulamayı atlamak için SQLite'ı elle güncellemeyin.
 
-## Logs and State
+## Günlükler ve durum
 
-- `logs/litlib.log`: 20 MB rotation, five backups.
-- `state/litlib.db`: task and audit state; not a bibliographic master database.
-- `staging/downloads`: verified or recovery PDF artifacts.
-- `output`: RIS/manifests/full-text cache; all generated and excluded from Git.
-- `LITLIB_RUNTIME_ROOT/chrome`: dedicated profile/cache/downloads.
-- `LITLIB_RUNTIME_ROOT/experience/experiences.json`: personal experience library (see below).
+- `logs/litlib.log`: 20 MB'ta döndürülür, beş yedek tutulur.
+- `state/litlib.db`: görev ve denetim durumu; bibliyografik ana veritabanı değildir.
+- `staging/downloads`: doğrulanmış ya da kurtarılmış PDF dosyaları.
+- `output`: RIS/manifestler/tam metin önbelleği; hepsi üretilir ve Git dışında tutulur.
+- `LITLIB_RUNTIME_ROOT/chrome`: özel profil/önbellek/indirmeler.
+- `LITLIB_RUNTIME_ROOT/experience/experiences.json`: kişisel deneyim kütüphanesi (aşağıya
+  bakın).
 
-Back up the project `state/` directory only when no LitLib write command is running. Zotero
-backup follows Zotero's own guidance and must include its configured data directory. ZotSeek's
-index is derived and can be rebuilt.
+Projenin `state/` dizinini yalnız hiçbir LitLib yazma komutu çalışmıyorken yedekleyin.
+Zotero yedeği Zotero'nun kendi yönergelerine uyar ve yapılandırılmış veri dizinini
+içermelidir. ZotSeek'in indeksi türetilmiştir ve yeniden oluşturulabilir.
 
-## Personal Experience (`litlib learn`)
+## Kişisel deneyim (`litlib learn`)
 
-Successful institutional or CNKI downloads are recorded automatically into
-`<LITLIB_RUNTIME_ROOT>\experience\experiences.json`; entries hold `domain`, `route`,
-`url_pattern`, `doi_prefix`, success count and timestamps, and are sanitized before writing.
-PAYWALLED / HUMAN_REQUIRED / RATE_LIMITED / FAILED are never recorded.
+Başarılı kurum ya da CNKI indirmeleri otomatik olarak
+`<LITLIB_RUNTIME_ROOT>\experience\experiences.json` dosyasına kaydedilir; kayıtlar `domain`,
+`route`, `url_pattern`, `doi_prefix`, başarı sayısı ve zaman damgalarını tutar ve yazılmadan
+önce maskelenir. PAYWALLED / HUMAN_REQUIRED / RATE_LIMITED / FAILED asla kaydedilmez.
 
-- `litlib learn list [--domain <site>]` — view; `litlib learn export` — Markdown for agents.
-- `litlib learn add --domain <site> --route <route> --note "<what worked>"` — manual entry.
-- `litlib learn remove <id>` — delete a wrong entry.
+- `litlib learn list [--domain <site>]` görüntüler; `litlib learn export` Agent'lar için
+  Markdown üretir.
+- `litlib learn add --domain <site> --route <rota> --note "<ne işe yaradı>"` elle kayıt ekler.
+- `litlib learn remove <id>` hatalı kaydı siler.
 
-Personal experience lives outside the repository (git-ignored) and is per-user/per-machine.
-If the JSON is corrupted it is ignored and read as empty; deleting the file resets learning.
+Kişisel deneyim deponun dışında durur (git yok sayar) ve kullanıcıya/makineye özeldir. JSON
+bozulursa yok sayılır ve boş okunur; dosyayı silmek öğrenmeyi sıfırlar.
 
-## Enzyme Evidence Preparation
+## Enzim kanıtı hazırlama
 
-The optional cellulase data layer starts from a UniProt accession and keeps article acquisition
-separate from extraction:
+İsteğe bağlı selülaz veri katmanı bir UniProt accession'ından başlar ve makale edinmeyi veri
+çıkarımından ayrı tutar:
 
 ```powershell
 uv run litlib uniprot <accession> --output output\uniprot.json
-uv run litlib evidence scan <verified-paper.pdf>
-uv run litlib supplement discover <article-url>
-uv run litlib supplement download <supplement-url> --doi <parent-doi>
+uv run litlib evidence scan <doğrulanmış-makale.pdf>
+uv run litlib supplement discover <makale-url>
+uv run litlib supplement download <ek-dosya-url> --doi <ana-makale-doi>
 uv run litlib cellulase validate <measurements.jsonl>
 uv run litlib cellulase maxima <measurements.jsonl> --output <maxima.jsonl>
 ```
 
-Supplementary artifacts go to `staging/supplements` by default and are recorded in
-`output/supplement_manifest.jsonl`; they are never mixed with the primary article PDF. The
-evidence scan only creates triage signals for missing fields, figures, tables, and supplement
-references. It does not claim that a field is absent from an image. External multimodal review
-should be invoked only for the resulting image queue, not for every paper.
+Ek dosyalar varsayılan olarak `staging/supplements` altına gider ve
+`output/supplement_manifest.jsonl` dosyasına kaydedilir; ana makale PDF'iyle asla
+karıştırılmaz. Kanıt taraması yalnız eksik alanlar, şekiller, tablolar ve ek materyal
+referansları için ön değerlendirme sinyalleri üretir. Bir alanın görselde olmadığını iddia
+etmez. Harici çok kipli inceleme her makale için değil, yalnız ortaya çıkan görsel kuyruğu
+için çağrılmalıdır.
 
-Cellulase maxima are selected per construct × normalized substrate × metric family × unit ×
-assay method. Missing fields, relative activity, digitized values, and inferred construct
-sequences remain explicitly labelled for later review.
+Selülaz maksimumları yapı × normalleştirilmiş substrat × metrik ailesi × birim × assay method
+başına seçilir. Eksik alanlar, bağıl aktivite, sayısallaştırılmış değerler ve çıkarımla elde
+edilen yapı dizileri sonraki inceleme için açıkça etiketli kalır.
 
-## Upgrade
+## Güncelleme
 
 ```powershell
 git pull --ff-only
@@ -116,12 +121,13 @@ uv run pytest
 uv run litlib doctor
 ```
 
-Older MCP configuration that starts `.venv\Scripts\litlib.exe` can lock that wrapper on
-Windows. The documented configuration uses `python.exe -m litlib.cli mcp`; migrate old
-clients, restart them, then run `uv sync`. Restart Zotero after upgrading ZotSeek.
+`.venv\Scripts\litlib.exe`'yi başlatan eski MCP yapılandırması Windows'ta bu sarmalayıcıyı
+kilitleyebilir. Belgelenen yapılandırma `python.exe -m litlib.cli mcp` kullanır; eski
+istemcileri taşıyın, yeniden başlatın, sonra `uv sync` çalıştırın. ZotSeek'i güncelledikten
+sonra Zotero'yu yeniden başlatın.
 
-## Cleanup
+## Temizlik
 
-There is no implemented `litlib clean` command. Inspect generated directories and ask the
-user before deleting anything. Never automatically delete PDFs, Zotero attachments, task
-state, browser profiles, or quarantine/recovery files.
+Uygulanmış bir `litlib clean` komutu yoktur. Üretilen dizinleri inceleyin ve bir şey silmeden
+önce kullanıcıya sorun. PDF'leri, Zotero eklerini, görev durumunu, tarayıcı profillerini ya da
+karantina/kurtarma dosyalarını asla otomatik silmeyin.

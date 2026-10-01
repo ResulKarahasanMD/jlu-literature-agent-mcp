@@ -1,9 +1,9 @@
-# Contributing
+# Katkıda bulunma
 
-LitLib is aimed first at Jilin University students who need a reproducible,
-authorized literature workflow. Contributions must preserve that boundary.
+LitLib öncelikle yeniden üretilebilir, yetkili bir literatür iş akışına ihtiyaç duyan
+Jilin Üniversitesi öğrencileri için yazıldı. Katkılar bu sınırı korumalıdır.
 
-## Development setup
+## Geliştirme ortamı
 
 ```powershell
 git clone https://github.com/ganpingzhu904-dev/jlu-literature-agent-mcp.git
@@ -14,26 +14,28 @@ uv run pytest
 uv run ruff check .
 ```
 
-Do not commit `.env`, PDFs, CAJ files, Zotero databases, browser profiles,
-cookies, WebVPN tokens, downloaded XPI files, logs, or generated full text.
+`.env`, PDF'ler, CAJ dosyaları, Zotero veritabanları, tarayıcı profilleri, çerezler,
+WebVPN token'ları, indirilen XPI dosyaları, günlükler ya da üretilmiş tam metin commit
+edilmez.
 
-## Pull requests
+## Pull request'ler
 
-1. Keep publisher-specific behavior in a small, testable adapter or routing branch.
-2. Add a fixture-based test that does not require a live institutional session.
-3. Update `docs/DOWNLOAD_PLAYBOOK.md` with the observed symptom, successful route,
-   failed routes, stop condition, access environment, and verification date.
-4. Label observations as `verified`, `inferred`, or `unverified`.
-5. Never add CAPTCHA bypasses, paywall bypasses, high-concurrency scraping, or
-   credential/cookie export that is enabled by default.
+1. Yayıncıya özgü davranışı küçük, test edilebilir bir adaptörde ya da yönlendirme dalında
+   tutun.
+2. Canlı kurum oturumu gerektirmeyen, fixture tabanlı bir test ekleyin.
+3. `docs/DOWNLOAD_PLAYBOOK.md` dosyasını gözlenen belirti, başarılı rota, başarısız rotalar,
+   durma koşulu, erişim ortamı ve doğrulama tarihiyle güncelleyin.
+4. Gözlemleri `verified`, `inferred` ya da `unverified` olarak etiketleyin.
+5. Asla CAPTCHA aşma, ödeme duvarı aşma, yüksek eşzamanlılıklı kazıma ya da varsayılan
+   olarak açık kimlik bilgisi/çerez dışa aktarımı eklemeyin.
 
-Live smoke tests must use the contributor's own authorized account, a visible
-browser, batches of at most 10 papers, concurrency 1, and an 8-15 second delay.
+Canlı smoke testlerde katkıcının kendi yetkili hesabı, görünür bir tarayıcı, en fazla 10
+makalelik partiler, eşzamanlılık 1 ve 8-15 saniyelik bekleme kullanılmalıdır.
 
-## Reporting a site regression
+## Site gerilemesi bildirme
 
-Include the DOI prefix, landing host, access mode (`campus`, `offcampus`, or
-WebVPN), HTTP status or visible error text, whether a human challenge appeared,
-the redacted `litlib status --attempts <task-id>` output, and the date tested.
-Never paste credentials, cookies, query tokens, or full publisher URLs that
-contain session material.
+DOI önekini, açılış sayfası host'unu, erişim modunu (`campus`, `offcampus` ya da WebVPN),
+HTTP durumunu ya da görünen hata metnini, insan doğrulaması çıkıp çıkmadığını, maskelenmiş
+`litlib status --attempts <task-id>` çıktısını ve test tarihini ekleyin. Kimlik bilgilerini,
+çerezleri, query token'larını ya da oturum bilgisi içeren tam yayıncı URL'lerini asla
+yapıştırmayın.

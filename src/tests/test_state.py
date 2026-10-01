@@ -1,4 +1,4 @@
-"""测试：去重顺序、状态机、任务队列。"""
+"""Testler: tekilleştirme sırası, durum makinesi, görev kuyruğu."""
 
 from __future__ import annotations
 
@@ -196,7 +196,7 @@ class TestStateDB:
         work1.doi = "10.1000/same"
         state.update_work(work1)
         work2.doi = "10.1000/same"
-        with pytest.raises(DedupeConflictError, match="去重冲突"):
+        with pytest.raises(DedupeConflictError, match="tekilleştirme çakışması"):
             state.update_work(work2)
 
     def test_readonly_state_does_not_write(self, tmp_path: Path):

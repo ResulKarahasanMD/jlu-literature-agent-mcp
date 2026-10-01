@@ -1,63 +1,63 @@
-name: Publisher or database regression
-description: Report a changed publisher, CNKI, CARSI, or WebVPN flow without sharing secrets.
+name: Yayıncı ya da veritabanı gerilemesi
+description: Değişen bir yayıncı, CNKI, CARSI ya da WebVPN akışını gizli bilgi paylaşmadan bildirin.
 title: "[site] "
 labels: ["site-regression"]
 body:
   - type: markdown
     attributes:
       value: |
-        Do not paste credentials, cookies, signed URLs, WebVPN tokens, HAR files, or copyrighted full text.
+        Kimlik bilgisi, çerez, imzalı URL, WebVPN token'ı, HAR dosyası ya da telif korumalı tam metin yapıştırmayın.
   - type: input
     id: host
     attributes:
-      label: Landing host
+      label: Açılış sayfası host'u
       placeholder: onlinelibrary.wiley.com
     validations:
       required: true
   - type: input
     id: doi_prefix
     attributes:
-      label: DOI prefix or database
-      placeholder: 10.1002 or CNKI
+      label: DOI öneki ya da veritabanı
+      placeholder: 10.1002 ya da CNKI
     validations:
       required: true
   - type: dropdown
     id: access_mode
     attributes:
-      label: Access mode
+      label: Erişim modu
       options:
         - OA/public
-        - JLU campus network
-        - JLU institution login/CARSI
+        - JLU kampüs ağı
+        - JLU kurum girişi/CARSI
         - JLU WebVPN
-        - Unknown
+        - Bilinmiyor
     validations:
       required: true
   - type: textarea
     id: observation
     attributes:
-      label: Redacted observation
-      description: Include HTTP status, content type, visible error text, and whether a human challenge appeared.
+      label: Maskelenmiş gözlem
+      description: HTTP durumunu, içerik türünü, görünen hata metnini ve insan doğrulaması çıkıp çıkmadığını yazın.
     validations:
       required: true
   - type: textarea
     id: attempts
     attributes:
-      label: Routes attempted
-      description: Summarize redacted `litlib status --attempts <task-id>` output and stop conditions.
+      label: Denenen rotalar
+      description: Maskelenmiş `litlib status --attempts <task-id>` çıktısını ve durma koşullarını özetleyin.
     validations:
       required: true
   - type: input
     id: tested_at
     attributes:
-      label: Date tested
+      label: Test tarihi
       placeholder: YYYY-MM-DD
     validations:
       required: true
   - type: checkboxes
     id: compliance
     attributes:
-      label: Compliance confirmation
+      label: Uyum onayı
       options:
-        - label: I used my own authorized access and did not bypass CAPTCHA, paywalls, or rate limits.
+        - label: Kendi yetkili erişimimi kullandım; CAPTCHA, ödeme duvarı ya da hız sınırlarını aşmadım.
           required: true

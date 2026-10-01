@@ -1,22 +1,33 @@
-"""测试：元数据归一化、OA 通道、流式下载。"""
+"""Testler: metadata normalleştirme, OA kanalları, akışlı indirme."""
 
 from __future__ import annotations
+
+import hashlib
 
 import httpx
 import pytest
 
+from litlib import transport_retry
 from litlib.download import download_to_file
 from litlib.metadata import (
     _author_parts,
     _crossref_to_work,
     _datacite_to_work,
     _pubmed_to_work,
+    fetch_metadata,
     merge_work,
     resolve_by_arxiv,
     resolve_by_doi,
 )
-from litlib.models import Work
-from litlib.oa import crossref_link, find_oa, find_oa_candidates, mdpi_static_pdf, unpaywall
+from litlib.models import Work, arxiv_id_from_doi
+from litlib.oa import (
+    arxiv_direct,
+    crossref_link,
+    find_oa,
+    find_oa_candidates,
+    mdpi_static_pdf,
+    unpaywall,
+)
 
 CROSSREF_MSG = {
     "DOI": "10.1000/XYZ.2024.123",
@@ -159,6 +170,43 @@ class TestResolveByDOI:
         assert w.doi == "10.1000/xyz"
 
 
+class TestArxivDOI:
+    """arXiv'in DataCite DOI'si (10.48550/arXiv.<id>) arXiv ID'sine eşlenmelidir."""
+
+    def test_arxiv_id_from_doi(self):
+        assert arxiv_id_from_doi("10.48550/arXiv.1706.03762") == "1706.03762"
+        assert arxiv_id_from_doi("https://doi.org/10.48550/ARXIV.2401.00001") == "2401.00001"
+        assert arxiv_id_from_doi("10.48550/arXiv.hep-th/9901001") == "hep-th/9901001"
+        assert arxiv_id_from_doi("10.1038/s41586-025-08610-1") is None
+        assert arxiv_id_from_doi(None) is None
+
+    @pytest.mark.asyncio
+    async def test_arxiv_direct_derives_id_from_doi(self):
+        result = await arxiv_direct(None, Work(doi="10.48550/arxiv.1706.03762"))
+        assert result.found
+        assert result.url == "https://arxiv.org/pdf/1706.03762"
+
+    @pytest.mark.asyncio
+    async def test_fetch_metadata_sets_arxiv_from_datacite_doi(self):
+        datacite = {"attributes": {
+            "doi": "10.48550/ARXIV.1706.03762",
+            "titles": [{"title": "Attention Is All You Need"}],
+            "publicationYear": 2017,
+            "creators": [{"familyName": "Vaswani", "givenName": "Ashish"}],
+            "types": {"resourceTypeGeneral": "Preprint"},
+        }}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if "datacite" in str(request.url):
+                return httpx.Response(200, json={"data": datacite})
+            return httpx.Response(404)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            w = await fetch_metadata(client, Work(doi="10.48550/arxiv.1706.03762"))
+        assert w.title == "Attention Is All You Need"
+        assert w.arxiv == "1706.03762"
+
+
 class TestOAFind:
     @pytest.mark.asyncio
     async def test_mdpi_static_pdf_url(self):
@@ -270,3 +318,82 @@ class TestDownload:
             with pytest.raises(ValueError):
                 await download_to_file(client, "https://x/big.pdf", dest, max_bytes=100)
         assert not dest.exists()
+
+    # GlobalProtect DNS'i ara sıra zaman aşımına düşer: yalnız bağlantı aşaması yeniden denenir.
+
+    @pytest.fixture()
+    def fast_retry(self, monkeypatch):
+        """Yeniden deneme aralarını sıfırlar; deneme sayısı (4) değişmez."""
+        monkeypatch.setattr(
+            transport_retry, "RETRY_DELAYS", (0.0,) * len(transport_retry.RETRY_DELAYS))
+
+    @pytest.mark.asyncio
+    async def test_transient_connect_error_is_retried(self, tmp_path, fast_retry):
+        """VPN DNS'i ilk denemede düşer (ConnectError); ikinci deneme aynı dosyayı getirir."""
+        payload = b"%PDF-1.4 retried content " * 100
+        calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            if len(calls) == 1:
+                raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+            return httpx.Response(200, content=payload)
+
+        dest = tmp_path / "retry.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            final, sha, size = await download_to_file(client, "https://x/retry.pdf", dest)
+        assert final == dest and size == len(payload) and len(calls) == 2
+        assert sha == hashlib.sha256(payload).hexdigest()
+        assert not (tmp_path / "retry.pdf.part").exists()
+
+    @pytest.mark.asyncio
+    async def test_persistent_connect_error_gives_up_after_four_attempts(
+            self, tmp_path, fast_retry):
+        calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            raise httpx.ConnectError("[Errno 8] nodename nor servname provided, or not known")
+
+        dest = tmp_path / "never.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(httpx.ConnectError):
+                await download_to_file(client, "https://x/never.pdf", dest)
+        assert len(calls) == 4
+        assert not dest.exists() and not (tmp_path / "never.pdf.part").exists()
+
+    @pytest.mark.asyncio
+    async def test_http_error_status_is_not_retried(self, tmp_path, fast_retry):
+        calls: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            return httpx.Response(503, text="maintenance")
+
+        dest = tmp_path / "down.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(httpx.HTTPStatusError):
+                await download_to_file(client, "https://x/down.pdf", dest)
+        assert len(calls) == 1
+        assert not dest.exists() and not (tmp_path / "down.pdf.part").exists()
+
+    @pytest.mark.asyncio
+    async def test_read_error_mid_stream_is_not_retried(self, tmp_path, fast_retry):
+        """Gövde akarken kopan bağlantı yeniden denenmez: yalnız bağlantı aşaması sarılıdır."""
+        calls: list[httpx.Request] = []
+
+        class BrokenStream(httpx.AsyncByteStream):
+            async def __aiter__(self):
+                yield b"%PDF-1.4 partial"
+                raise httpx.ReadError("connection reset while streaming")
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append(request)
+            return httpx.Response(200, stream=BrokenStream())
+
+        dest = tmp_path / "broken.pdf"
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            with pytest.raises(httpx.ReadError):
+                await download_to_file(client, "https://x/broken.pdf", dest)
+        assert len(calls) == 1
+        assert not dest.exists() and not (tmp_path / "broken.pdf.part").exists()
